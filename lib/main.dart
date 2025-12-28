@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bighustle/moduls/profile/presentation/screen/profile_screen.dart';
 
 import 'package:flutter_bighustle/core/constants/app_routes.dart';
 import 'package:flutter_bighustle/moduls/auth/presentation/screen/email_verify_screen.dart';
