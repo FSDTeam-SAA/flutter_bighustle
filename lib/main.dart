@@ -9,6 +9,8 @@ import 'package:flutter_bighustle/moduls/auth/presentation/screen/reset_password
 import 'package:flutter_bighustle/moduls/auth/presentation/screen/splash_screen.dart';
 import 'package:flutter_bighustle/moduls/auth/presentation/screen/signup_screen.dart';
 import 'package:flutter_bighustle/moduls/auth/presentation/widget/auth_ui.dart';
+import 'package:flutter_bighustle/moduls/home/screen/bottom_nav_screen.dart';
+import 'package:flutter_bighustle/moduls/home/screen/teen_drivers_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -59,6 +61,10 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(
               builder: (_) => ResetPasswordscreen(email: email),
             );
+          case AppRoutes.home:
+            return MaterialPageRoute(builder: (_) => const BottomNavScreen());
+          case AppRoutes.teenDrivers:
+            return MaterialPageRoute(builder: (_) => const TeenDriversScreen());
           default:
             return MaterialPageRoute(builder: (_) => const LoginScreen());
         }

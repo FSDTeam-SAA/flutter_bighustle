@@ -35,11 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    Navigator.pushNamed(
-      context,
-      AppRoutes.otpVerify,
-      arguments: email,
-    );
+    Navigator.pushReplacementNamed(context, AppRoutes.home);
   }
 
   @override

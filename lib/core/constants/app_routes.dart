@@ -6,4 +6,6 @@ class AppRoutes {
   static const String otpVerify = '/otp-verify';
   static const String emailVerify = '/email-verify';
   static const String resetPassword = '/reset-password';
+  static const String home = '/home';
+  static const String teenDrivers = '/teen-drivers';
 }
