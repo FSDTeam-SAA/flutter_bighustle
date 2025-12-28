@@ -1,4 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bighustle/moduls/profile/presentation/screen/profile_screen.dart';
+
+import 'package:flutter_bighustle/core/constants/app_routes.dart';
+import 'package:flutter_bighustle/moduls/auth/presentation/screen/email_verify_screen.dart';
+import 'package:flutter_bighustle/moduls/auth/presentation/screen/forget_password.dart';
+import 'package:flutter_bighustle/moduls/auth/presentation/screen/login_screen.dart';
+import 'package:flutter_bighustle/moduls/auth/presentation/screen/otp_verify_screen.dart';
+import 'package:flutter_bighustle/moduls/auth/presentation/screen/reset_password-screen.dart';
+import 'package:flutter_bighustle/moduls/auth/presentation/screen/splash_screen.dart';
+import 'package:flutter_bighustle/moduls/auth/presentation/screen/signup_screen.dart';
+import 'package:flutter_bighustle/moduls/auth/presentation/widget/auth_ui.dart';
+import 'package:flutter_bighustle/moduls/home/screen/bottom_nav_screen.dart';
+import 'package:flutter_bighustle/moduls/home/screen/teen_drivers_screen.dart';
 
 import 'package:flutter_bighustle/core/constants/app_routes.dart';
 import 'package:flutter_bighustle/moduls/auth/presentation/screen/email_verify_screen.dart';
