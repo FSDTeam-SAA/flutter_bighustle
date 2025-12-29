@@ -9,6 +9,9 @@ import 'package:flutter_bighustle/moduls/auth/presentation/screen/splash_screen.
 import 'package:flutter_bighustle/moduls/auth/presentation/screen/signup_screen.dart';
 import 'package:flutter_bighustle/moduls/auth/presentation/widget/auth_ui.dart';
 import 'package:flutter_bighustle/moduls/home/screen/bottom_nav_screen.dart';
+import 'package:flutter_bighustle/moduls/home/screen/learning_center_screen.dart';
+import 'package:flutter_bighustle/moduls/home/screen/learning_video_screen.dart';
+import 'package:flutter_bighustle/moduls/home/screen/teen_driver_posts_screen.dart';
 import 'package:flutter_bighustle/moduls/home/screen/teen_drivers_screen.dart';
 
 
@@ -65,6 +68,18 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(builder: (_) => const BottomNavScreen());
           case AppRoutes.teenDrivers:
             return MaterialPageRoute(builder: (_) => const TeenDriversScreen());
+          case AppRoutes.teenDriverPosts:
+            return MaterialPageRoute(
+              builder: (_) => const TeenDriverPostsScreen(),
+            );
+          case AppRoutes.learningCenter:
+            return MaterialPageRoute(
+              builder: (_) => const LearningCenterScreen(),
+            );
+          case AppRoutes.learningVideo:
+            return MaterialPageRoute(
+              builder: (_) => const LearningVideoScreen(),
+            );
           default:
             return MaterialPageRoute(builder: (_) => const LoginScreen());
         }

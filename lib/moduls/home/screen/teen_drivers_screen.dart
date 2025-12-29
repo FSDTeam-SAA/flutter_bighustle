@@ -123,7 +123,10 @@ class TeenDriversScreen extends StatelessWidget {
                       height: (size.height * 0.065).clamp(44.0, 54.0),
                       child: ElevatedButton(
                         onPressed: () =>
-                            _showMessage(context, 'Continue Learning'),
+                            Navigator.pushNamed(
+                              context,
+                              AppRoutes.learningCenter,
+                            ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryColor,
                           foregroundColor: Colors.white,
@@ -240,7 +243,10 @@ class TeenDriversScreen extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => _showMessage(context, 'See more'),
+                    onPressed: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.teenDriverPosts,
+                    ),
                     child: Text(
                       'See more',
                       style: TextStyle(

@@ -201,12 +201,30 @@ class HomeScreen extends StatelessWidget {
               SizedBox(height: size.height * 0.03),
 
               /// ---------------- RECENT ACTIVITY ----------------
-              Text(
-                'Recent Activity',
-                style: TextStyle(
-                  fontSize: (size.width * 0.055).clamp(16.0, 22.0),
-                  fontWeight: FontWeight.w600,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Recent Activity',
+                    style: TextStyle(
+                      fontSize: (size.width * 0.055).clamp(16.0, 22.0),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      // Navigator.pushNamed(context, AppRoutes.teenDrivers);
+                    },
+                    child: Text(
+                      'See more',
+                      style: TextStyle(
+                        fontSize: (size.width * 0.042).clamp(12.0, 16.0),
+                        color: const Color(0xFF3F76F6),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               SizedBox(height: size.height * 0.02),
 
