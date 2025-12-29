@@ -11,4 +11,12 @@ class AppRoutes {
   static const String teenDriverPosts = '/teen-driver-posts';
   static const String learningCenter = '/learning-center';
   static const String learningVideo = '/learning-video';
+  static const String license = '/license';
+  static const String licenseAlerts = '/license-alerts';
+  static const String editLicenseInfo = '/edit-license-info';
+  static const String ticket = '/ticket';
+  static const String ticketDetails = '/ticket-details';
+  static const String ticketNotifications = '/ticket-notifications';
+  static const String planPricing = '/plan-pricing';
+  static const String planPricingDetails = '/plan-pricing-details';
 }

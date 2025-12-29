@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bighustle/moduls/license/presentation/screen/license_screen.dart';
 import 'package:flutter_bighustle/moduls/profile/presentation/screen/profile_screen.dart';
+import 'package:flutter_bighustle/moduls/ticket/presentation/screen/ticket_screen.dart';
 
 import 'home_screen.dart';
 
@@ -17,8 +19,9 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
   Widget build(BuildContext context) {
     final pages = [
       const HomeScreen(),
+      const LicenseScreen(),
       const _PlaceholderTab(title: 'License'),
-      const _PlaceholderTab(title: 'Ticket'),
+      const TicketScreen(),
       const ProfileScreen(),
     ];
 
