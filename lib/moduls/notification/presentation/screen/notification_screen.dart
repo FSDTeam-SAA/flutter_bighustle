@@ -182,9 +182,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
       debugPrint('✅ Notification marked as read: $notificationId');
     } catch (e) {
       debugPrint('❌ Error marking notification as read: $e');
-      _snackbarNotifier.notifyError(
-        message: 'Failed to mark notification as read',
-      );
     }
   }
 
