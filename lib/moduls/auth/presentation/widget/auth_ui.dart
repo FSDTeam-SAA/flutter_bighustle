@@ -23,14 +23,12 @@ class AuthLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: fontSize,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-        color: AuthColors.primary,
-      ),
+    return Image.asset(
+      'assets/images/app_logo.png',
+      height: fontSize*1.5,
+      width: fontSize * 2.2,
+      fit: BoxFit.contain,
+      semanticLabel: text,
     );
   }
 }
