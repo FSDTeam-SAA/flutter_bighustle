@@ -328,6 +328,7 @@ class SubscribePaymentController extends ChangeNotifier {
           paymentSheetParameters: SetupPaymentSheetParameters(
             paymentIntentClientSecret: paymentData.clientSecret!,
             merchantDisplayName: StripeConfig.merchantName,
+            // merchantCountryCode: StripeConfig.merchantCountryCode,
             style: ThemeMode.light,
             billingDetails: BillingDetails(
               email: billingInfo.email,
