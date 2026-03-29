@@ -27,6 +27,8 @@ class ProfileData extends ChangeNotifier {
   bool inactiveAlerts = false;
   bool teenDriverAlerts = false;
   bool communityAlerts = false;
+  bool subscribed = false;
+  String planName = '';
   bool hasLoaded = false;
 
   void updateProfile({
@@ -52,6 +54,8 @@ class ProfileData extends ChangeNotifier {
     inactiveAlerts = profile.inactiveAlerts;
     teenDriverAlerts = profile.teenDriverAlerts;
     communityAlerts = profile.communityAlerts;
+    subscribed = profile.subscribed;
+    planName = profile.planName;
     if (profile.dateOfBirth != null) {
       final date = profile.dateOfBirth!;
       dateOfBirth =
@@ -78,8 +82,22 @@ class ProfileData extends ChangeNotifier {
     inactiveAlerts = false;
     teenDriverAlerts = false;
     communityAlerts = false;
+    subscribed = false;
+    planName = '';
     hasLoaded = true;
     notifyListeners();
+  }
+
+  void updateSubscription({
+    required bool subscribed,
+    String planName = '',
+    bool notify = true,
+  }) {
+    this.subscribed = subscribed;
+    this.planName = planName;
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   void updateNotificationSettings({

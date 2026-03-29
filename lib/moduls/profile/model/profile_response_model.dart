@@ -16,6 +16,8 @@ class ProfileResponseModel {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? dateOfBirth;
+  final bool subscribed;
+  final String planName;
 
   const ProfileResponseModel({
     required this.id,
@@ -35,6 +37,8 @@ class ProfileResponseModel {
     required this.createdAt,
     required this.updatedAt,
     required this.dateOfBirth,
+    required this.subscribed,
+    required this.planName,
   });
 
   factory ProfileResponseModel.fromJson(Map<String, dynamic> json) {
@@ -66,6 +70,21 @@ class ProfileResponseModel {
 
     final primaryId = readString(json['_id']);
     final fallbackId = readString(json['id']);
+    final currentPlan = json['currentPlan'];
+    final activePlan = json['activePlan'];
+    String readPlanName() {
+      final direct = readString(json['planName']);
+      if (direct.isNotEmpty) return direct;
+      if (currentPlan is Map) {
+        final fromCurrent = readString(currentPlan['name']);
+        if (fromCurrent.isNotEmpty) return fromCurrent;
+      }
+      if (activePlan is Map) {
+        final fromActive = readString(activePlan['name']);
+        if (fromActive.isNotEmpty) return fromActive;
+      }
+      return '';
+    }
 
     return ProfileResponseModel(
       id: primaryId.isNotEmpty ? primaryId : fallbackId,
@@ -87,6 +106,8 @@ class ProfileResponseModel {
       createdAt: readDate(json['createdAt']),
       updatedAt: readDate(json['updatedAt']),
       dateOfBirth: readDate(json['dob']),
+      subscribed: readBool(json['subscribed'] ?? json['isSubscribed']),
+      planName: readPlanName(),
     );
   }
 }

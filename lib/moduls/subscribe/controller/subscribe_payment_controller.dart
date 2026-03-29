@@ -404,11 +404,11 @@ class SubscribePaymentController extends ChangeNotifier {
 
     print('Stripe: initPaymentSheet done');
     print('Stripe: presentPaymentSheet start');
-    await Stripe.instance.presentPaymentSheet(
-      options: const PaymentSheetPresentOptions(timeout: 45000),
-    ).timeout(
-      const Duration(seconds: 60),
-    );
+    await Stripe.instance
+        .presentPaymentSheet(
+          options: const PaymentSheetPresentOptions(timeout: 45000),
+        )
+        .timeout(const Duration(seconds: 60));
     print('Stripe: presentPaymentSheet done');
   }
 
@@ -479,6 +479,10 @@ class SubscribePaymentController extends ChangeNotifier {
       if (status == 'paid') {
         snackbarNotifier.notifySuccess(message: outcome.message);
         _currentPlan = _selectedPlan;
+        ProfileData.instance.updateSubscription(
+          subscribed: true,
+          planName: _selectedPlan?.name ?? '',
+        );
         notifyListeners();
         return true;
       }
