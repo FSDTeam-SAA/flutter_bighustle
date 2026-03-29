@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 
 base class ApiEndpoints {
+  static const String socketUrl = _LocalHostWifi.socketUrl;
   // static const String socketUrl = _LiveHostUrls.socketUrl;
 
-  static const String baseUrl = _LiveHostUrls.baseUrl;
+  static const String baseUrl = _LocalHostWifi.baseUrl;
 
   /// ### post
   static const String login = _Auth.login;
@@ -29,6 +30,8 @@ base class ApiEndpoints {
   static const String resetPassword = _Auth.resetPassword;
 
   static const String createNewPassword = _Auth.resetPassword;
+
+  static const String deleteAccount = _Auth.deleteAccount;
 
   /// ### post
   static const String refreshToken = _Auth.refreshToken;
@@ -178,6 +181,10 @@ base class ApiEndpoints {
   static String addTeenDriverPostComment(String postId) =>
       _TeenDriverExperience.addComment(postId);
 
+  /// ### post
+  static const String addTeenDriverGlobalComment =
+      _TeenDriverExperience.addGlobalComment;
+
   /// ### get
   static String getTeenDriverPostComments(String postId) =>
       _TeenDriverExperience.getComments(postId);
@@ -201,20 +208,34 @@ base class ApiEndpoints {
   /// ### get
   static String getTicketById(String ticketId) =>
       _Ticket.getTicketById(ticketId);
+
+  // ---------------------- PLAN -----------------------------
+  static const String getPlans = _Plan.getPlans;
+  static const String createPlan = _Plan.createPlan;
+  static String getPlanById(String planId) => _Plan.getPlanById(planId);
+  static String updatePlan(String planId) => _Plan.updatePlan(planId);
+  static String deletePlan(String planId) => _Plan.deletePlan(planId);
+  static const String createPlanPayment = _Plan.createPlanPayment;
+  static const String confirmPlanPaymentNoId = _Plan.confirmPlanPaymentNoId;
+  static String confirmPlanPayment(String paymentId) =>
+      _Plan.confirmPlanPayment(paymentId);
 }
 
 class _LocalHostWifi {
-  static const String socketUrl =
-      'https://backend-bigghustle-icpx.onrender.com';
-  static const String baseUrl = 'https://api.drivestatusllc.com/api/v1';
-  // static const String baseUrl = 'http://10.10.5.85:5000/api/v1';
+  //  static const String socketUrl = 'https://backend-bigghustle-icpx.onrender.com';
+  //  static const String baseUrl = 'https://backend-bigghustle-icpx.onrender.com/api/v1';
+  // static const String socketUrl = 'http://192.168.1.6:5000';
+  // static const String baseUrl = 'http://192.168.1.6:5000/api/v1';
+  
+  static const String socketUrl = 'http://10.10.5.85:5000';
+  static const String baseUrl = 'http://10.10.5.85:5000/api/v1';
 }
 
 class _LiveHostUrls {
   // static const String socketUrl = 'https://backend-bigghustle-icpx.onrender.com';
   //  static const String baseUrl = 'https://backend-bigghustle-icpx.onrender.com/api/v1';
-   static const String socketUrl = 'https://api.drivestatusllc.com';
-   static const String baseUrl = 'https://api.drivestatusllc.com/api/v1';
+  static const String socketUrl = 'https://api.drivestatusllc.com';
+  static const String baseUrl = 'https://api.drivestatusllc.com/api/v1';
   // static const String baseUrl = 'http://10.10.5.94:5000/api/v1';
 }
 
@@ -231,6 +252,7 @@ class _Auth {
   static const String verifyEmail = '$_authRoute/verify';
   //static const String registerVerify = '$_authRoute/verify-otp';
   static const String changePassword = '$_authRoute/change-password';
+  static const String deleteAccount = '$_authRoute/account-delete';
   static const String resetPassword = '$_authRoute/reset-password';
 }
 
@@ -308,6 +330,7 @@ class _TeenDriverExperience {
       '${ApiEndpoints.baseUrl}/teen/posts';
   static const String createExperience = _teenDriverExperienceRoute;
   static const String teenDriverPosts = _teenDriverExperienceRoute;
+  static const String addGlobalComment = '$_teenDriverExperienceRoute/comments';
   static String addComment(String postId) =>
       '$_teenDriverExperienceRoute/$postId/comments';
   static String getComments(String postId) =>
@@ -340,6 +363,20 @@ class _Ticket {
   }
 
   static String getTicketById(String ticketId) => '$_ticketRoute/$ticketId';
+}
+
+// ---------------------- PLAN -----------------------------
+class _Plan {
+  static const String _planRoute = '${ApiEndpoints.baseUrl}/plans';
+  static const String getPlans = _planRoute;
+  static const String createPlan = _planRoute;
+  static String getPlanById(String planId) => '$_planRoute/$planId';
+  static String updatePlan(String planId) => '$_planRoute/$planId';
+  static String deletePlan(String planId) => '$_planRoute/$planId';
+  static const String createPlanPayment = '$_planRoute/payments';
+  static const String confirmPlanPaymentNoId = '$_planRoute/payments/confirm';
+  static String confirmPlanPayment(String paymentId) =>
+      '$_planRoute/payments/$paymentId/confirm';
 }
 
 // ---------------------- RIDE -----------------------------
