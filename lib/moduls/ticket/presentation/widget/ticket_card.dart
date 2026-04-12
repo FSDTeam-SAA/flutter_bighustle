@@ -6,8 +6,7 @@ class TicketCard extends StatelessWidget {
   final String ticketId;
   final String type;
   final String dueDate;
-  final bool isPaid;
-  final VoidCallback? onPayNow;
+  final bool isClosed;
   final VoidCallback? onViewDetails;
 
   const TicketCard({
@@ -15,18 +14,16 @@ class TicketCard extends StatelessWidget {
     required this.ticketId,
     required this.type,
     required this.dueDate,
-    this.isPaid = false,
-    this.onPayNow,
+    this.isClosed = false,
     this.onViewDetails,
   });
 
   @override
   Widget build(BuildContext context) {
-    final Color statusColor = isPaid
+    final Color statusColor = isClosed
         ? const Color(0xFF2CC56F)
         : const Color(0xFFB7791F);
-    final String statusLabel = isPaid ? 'Closed' : 'Open';
-    final showPayAction = !isPaid && onPayNow != null;
+    final String statusLabel = isClosed ? 'Closed' : 'Open';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -93,16 +90,6 @@ class TicketCard extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              if (showPayAction) ...[
-                Expanded(
-                  child: TicketActionButton(
-                    label: 'Pay now',
-                    isPrimary: true,
-                    onPressed: onPayNow,
-                  ),
-                ),
-                const SizedBox(width: 12),
-              ],
               Expanded(
                 child: TicketActionButton(
                   label: 'Open Details',

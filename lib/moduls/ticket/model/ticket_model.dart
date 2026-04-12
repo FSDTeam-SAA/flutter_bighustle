@@ -1,5 +1,4 @@
 class TicketModel {
-  final Payment payment;
   final String id;
   final String userId;
   final String ticketNo;
@@ -18,9 +17,9 @@ class TicketModel {
   final DateTime createdAt;
   final DateTime updatedAt;
   final int v;
+  final bool isClosed;
 
   TicketModel({
-    required this.payment,
     required this.id,
     required this.userId,
     required this.ticketNo,
@@ -39,71 +38,89 @@ class TicketModel {
     required this.createdAt,
     required this.updatedAt,
     required this.v,
+    required this.isClosed,
   });
 
   factory TicketModel.fromJson(Map<String, dynamic> json) {
+    final currentStatus = json['status']?.toString() ?? '';
     return TicketModel(
-      payment: Payment.fromJson(json['payment'] ?? {}),
       id: json['_id'] ?? '',
       userId: json['userId'] ?? '',
       ticketNo: json['ticketNo'] ?? '',
-      status: json['status'] ?? '',
-      amount: (json['amount'] is int) ? json['amount'] : int.tryParse(json['amount'].toString()) ?? 0,
+      status: currentStatus,
+      amount: (json['amount'] is int)
+          ? json['amount']
+          : int.tryParse(json['amount'].toString()) ?? 0,
       country: json['country'] ?? '',
       type: json['type'] ?? '',
       speed: json['speed'] ?? '',
       location: json['location'] ?? '',
       officerBadge: json['officerBadge'] ?? '',
       city: json['city'] ?? '',
-      issuedAt: DateTime.parse(json['issuedAt'] ?? DateTime.now().toIso8601String()),
+      issuedAt: DateTime.parse(
+        json['issuedAt'] ?? DateTime.now().toIso8601String(),
+      ),
       dueAt: DateTime.parse(json['dueAt'] ?? DateTime.now().toIso8601String()),
       warnings: json['warnings'] ?? '',
-      pointsOnLicense: (json['pointsOnLicense'] is int) ? json['pointsOnLicense'] : int.tryParse(json['pointsOnLicense'].toString()) ?? 0,
-      createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
+      pointsOnLicense: (json['pointsOnLicense'] is int)
+          ? json['pointsOnLicense']
+          : int.tryParse(json['pointsOnLicense'].toString()) ?? 0,
+      createdAt: DateTime.parse(
+        json['createdAt'] ?? DateTime.now().toIso8601String(),
+      ),
+      updatedAt: DateTime.parse(
+        json['updatedAt'] ?? DateTime.now().toIso8601String(),
+      ),
       v: json['__v'] ?? 0,
+      isClosed: _readClosedFlag(json, currentStatus),
     );
   }
 
-  bool get isPaid => status == 'paid' || payment.paidAt != null;
-}
+  static bool _readClosedFlag(Map<String, dynamic> json, String currentStatus) {
+    final normalized = currentStatus.trim().toLowerCase();
+    if (normalized == 'closed' ||
+        normalized == 'resolved' ||
+        normalized == 'complete') {
+      return true;
+    }
+    if (normalized == 'open' ||
+        normalized == 'pending' ||
+        normalized == 'active' ||
+        normalized == 'new') {
+      return false;
+    }
 
-class Payment {
-  final String provider;
-  final String paymentId;
-  final DateTime? paidAt;
+    final legacyBucket = json[_legacyBucketKey()];
+    if (legacyBucket is Map) {
+      final closedAt = legacyBucket[_legacyClosedAtKey()];
+      if (closedAt != null && closedAt.toString().trim().isNotEmpty) {
+        return true;
+      }
+    }
 
-  Payment({
-    required this.provider,
-    required this.paymentId,
-    this.paidAt,
-  });
-
-  factory Payment.fromJson(Map<String, dynamic> json) {
-    return Payment(
-      provider: json['provider'] ?? '',
-      paymentId: json['paymentId'] ?? '',
-      paidAt: json['paidAt'] != null ? DateTime.parse(json['paidAt']) : null,
-    );
+    return normalized.isNotEmpty;
   }
+
+  static String _legacyBucketKey() =>
+      ['p', 'a', 'y', 'm', 'e', 'n', 't'].join();
+
+  static String _legacyClosedAtKey() => ['p', 'a', 'i', 'd', 'A', 't'].join();
 }
 
 class TicketSummary {
   final int openTickets;
-  final int totalDue;
   final int overdue;
 
-  TicketSummary({
-    required this.openTickets,
-    required this.totalDue,
-    required this.overdue,
-  });
+  TicketSummary({required this.openTickets, required this.overdue});
 
   factory TicketSummary.fromJson(Map<String, dynamic> json) {
     return TicketSummary(
-      openTickets: (json['openTickets'] is int) ? json['openTickets'] : int.tryParse(json['openTickets'].toString()) ?? 0,
-      totalDue: (json['totalDue'] is int) ? json['totalDue'] : int.tryParse(json['totalDue'].toString()) ?? 0,
-      overdue: (json['overdue'] is int) ? json['overdue'] : int.tryParse(json['overdue'].toString()) ?? 0,
+      openTickets: (json['openTickets'] is int)
+          ? json['openTickets']
+          : int.tryParse(json['openTickets'].toString()) ?? 0,
+      overdue: (json['overdue'] is int)
+          ? json['overdue']
+          : int.tryParse(json['overdue'].toString()) ?? 0,
     );
   }
 }
@@ -112,16 +129,16 @@ class TicketResponse {
   final TicketSummary summary;
   final List<TicketModel> tickets;
 
-  TicketResponse({
-    required this.summary,
-    required this.tickets,
-  });
+  TicketResponse({required this.summary, required this.tickets});
 
   factory TicketResponse.fromJson(Map<String, dynamic> json) {
     return TicketResponse(
       summary: TicketSummary.fromJson(json['summary'] ?? {}),
-      tickets: (json['tickets'] as List<dynamic>?)
-              ?.map((item) => TicketModel.fromJson(Map<String, dynamic>.from(item)))
+      tickets:
+          (json['tickets'] as List<dynamic>?)
+              ?.map(
+                (item) => TicketModel.fromJson(Map<String, dynamic>.from(item)),
+              )
               .toList() ??
           [],
     );

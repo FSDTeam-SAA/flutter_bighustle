@@ -168,13 +168,7 @@ final class AuthInterfaceImpl extends AuthInterface {
           uid: loginResponse.userId.isNotEmpty ? loginResponse.userId : null,
         ),
       );
-      ProfileData.instance.updateSubscription(
-        subscribed: loginResponse.subscribed,
-        planName: loginResponse.planName,
-        subscriptionInterval: loginResponse.subscriptionInterval,
-        subscriptionStartsAt: loginResponse.subscriptionStartsAt,
-        subscriptionEndsAt: loginResponse.subscriptionEndsAt,
-      );
+      ProfileData.instance.markLoaded(notify: false);
 
       return Right(Success(data: role));
     } on DioException catch (e) {

@@ -30,7 +30,7 @@ final class TicketInterfaceImpl extends TicketInterface {
           return Success(
             message: responseBody['message']?.toString() ?? 'No tickets found',
             data: TicketResponse(
-              summary: TicketSummary(openTickets: 0, totalDue: 0, overdue: 0),
+              summary: TicketSummary(openTickets: 0, overdue: 0),
               tickets: [],
             ),
           );
@@ -41,7 +41,9 @@ final class TicketInterfaceImpl extends TicketInterface {
         );
 
         return Success(
-          message: responseBody['message']?.toString() ?? 'Tickets fetched successfully',
+          message:
+              responseBody['message']?.toString() ??
+              'Tickets fetched successfully',
           data: ticketResponse,
         );
       },
@@ -66,7 +68,6 @@ final class TicketInterfaceImpl extends TicketInterface {
           return Success(
             message: responseBody['message']?.toString() ?? 'No ticket found',
             data: TicketModel(
-              payment: Payment(provider: '', paymentId: ''),
               id: '',
               userId: '',
               ticketNo: '',
@@ -85,6 +86,7 @@ final class TicketInterfaceImpl extends TicketInterface {
               createdAt: DateTime.now(),
               updatedAt: DateTime.now(),
               v: 0,
+              isClosed: false,
             ),
           );
         }
@@ -94,7 +96,9 @@ final class TicketInterfaceImpl extends TicketInterface {
         );
 
         return Success(
-          message: responseBody['message']?.toString() ?? 'Ticket fetched successfully',
+          message:
+              responseBody['message']?.toString() ??
+              'Ticket fetched successfully',
           data: ticket,
         );
       },

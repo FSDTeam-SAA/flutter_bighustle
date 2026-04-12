@@ -98,18 +98,14 @@ class _TicketScreenState extends State<TicketScreen> {
                 valueListenable: TicketController.ticketsData,
                 builder: (context, ticketsData, _) {
                   return ValueListenableBuilder<List<TicketModel>>(
-                    valueListenable: TicketController.unpaidTickets,
-                    builder: (context, unpaidTickets, _) {
+                    valueListenable: TicketController.openTickets,
+                    builder: (context, openTickets, _) {
                       return ValueListenableBuilder<List<TicketModel>>(
-                        valueListenable: TicketController.paidTickets,
-                        builder: (context, paidTickets, _) {
+                        valueListenable: TicketController.closedTickets,
+                        builder: (context, closedTickets, _) {
                           final summary =
                               ticketsData?.summary ??
-                              TicketSummary(
-                                openTickets: 0,
-                                totalDue: 0,
-                                overdue: 0,
-                              );
+                              TicketSummary(openTickets: 0, overdue: 0);
 
                           return ListView(
                             padding: const EdgeInsets.symmetric(
@@ -161,14 +157,14 @@ class _TicketScreenState extends State<TicketScreen> {
                               ),
                               const SizedBox(height: 16),
                               TicketSummaryCard(
-                                openRecords: unpaidTickets.length,
-                                closedRecords: paidTickets.length,
+                                openRecords: openTickets.length,
+                                closedRecords: closedTickets.length,
                                 needsAttention: summary.overdue > 0
                                     ? summary.overdue
                                     : summary.openTickets,
                               ),
                               const SizedBox(height: 16),
-                              if (unpaidTickets.isNotEmpty) ...[
+                              if (openTickets.isNotEmpty) ...[
                                 const Text(
                                   'Open Records',
                                   style: TextStyle(
@@ -177,14 +173,14 @@ class _TicketScreenState extends State<TicketScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 10),
-                                ...unpaidTickets.map(
+                                ...openTickets.map(
                                   (ticket) => Padding(
                                     padding: const EdgeInsets.only(bottom: 10),
                                     child: TicketCard(
                                       ticketId: ticket.ticketNo,
                                       type: ticket.type,
                                       dueDate: _formatDateShort(ticket.dueAt),
-                                      isPaid: false,
+                                      isClosed: false,
                                       onViewDetails: () {
                                         Navigator.of(context).pushNamed(
                                           AppRoutes.ticketDetails,
@@ -196,7 +192,7 @@ class _TicketScreenState extends State<TicketScreen> {
                                 ),
                                 const SizedBox(height: 16),
                               ],
-                              if (paidTickets.isNotEmpty) ...[
+                              if (closedTickets.isNotEmpty) ...[
                                 const Text(
                                   'Closed Records',
                                   style: TextStyle(
@@ -205,14 +201,14 @@ class _TicketScreenState extends State<TicketScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 10),
-                                ...paidTickets.map(
+                                ...closedTickets.map(
                                   (ticket) => Padding(
                                     padding: const EdgeInsets.only(bottom: 10),
                                     child: TicketCard(
                                       ticketId: ticket.ticketNo,
                                       type: ticket.type,
                                       dueDate: _formatDateShort(ticket.dueAt),
-                                      isPaid: true,
+                                      isClosed: true,
                                       onViewDetails: () {
                                         Navigator.of(context).pushNamed(
                                           AppRoutes.ticketDetails,
@@ -223,7 +219,7 @@ class _TicketScreenState extends State<TicketScreen> {
                                   ),
                                 ),
                               ],
-                              if (unpaidTickets.isEmpty && paidTickets.isEmpty)
+                              if (openTickets.isEmpty && closedTickets.isEmpty)
                                 const Padding(
                                   padding: EdgeInsets.all(32.0),
                                   child: Center(

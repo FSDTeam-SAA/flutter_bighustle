@@ -5,9 +5,12 @@ import '../../interface/ticket_interface.dart';
 import '../../model/ticket_model.dart';
 
 class TicketController {
-  static final ValueNotifier<TicketResponse?> ticketsData = ValueNotifier<TicketResponse?>(null);
-  static final ValueNotifier<List<TicketModel>> unpaidTickets = ValueNotifier<List<TicketModel>>([]);
-  static final ValueNotifier<List<TicketModel>> paidTickets = ValueNotifier<List<TicketModel>>([]);
+  static final ValueNotifier<TicketResponse?> ticketsData =
+      ValueNotifier<TicketResponse?>(null);
+  static final ValueNotifier<List<TicketModel>> openTickets =
+      ValueNotifier<List<TicketModel>>([]);
+  static final ValueNotifier<List<TicketModel>> closedTickets =
+      ValueNotifier<List<TicketModel>>([]);
   static final ValueNotifier<bool> isLoading = ValueNotifier(false);
   static final ValueNotifier<bool> hasLoaded = ValueNotifier(false);
 
@@ -32,18 +35,22 @@ class TicketController {
           if (success.data != null) {
             ticketsData.value = success.data;
 
-            // Separate unpaid and paid tickets
+            // Split tickets into open and closed record groups for display.
             final allTickets = success.data!.tickets;
-            unpaidTickets.value = allTickets.where((ticket) => !ticket.isPaid).toList();
-            paidTickets.value = allTickets.where((ticket) => ticket.isPaid).toList();
+            openTickets.value = allTickets
+                .where((ticket) => !ticket.isClosed)
+                .toList();
+            closedTickets.value = allTickets
+                .where((ticket) => ticket.isClosed)
+                .toList();
           } else {
             // Reset to empty
             ticketsData.value = TicketResponse(
-              summary: TicketSummary(openTickets: 0, totalDue: 0, overdue: 0),
+              summary: TicketSummary(openTickets: 0, overdue: 0),
               tickets: [],
             );
-            unpaidTickets.value = [];
-            paidTickets.value = [];
+            openTickets.value = [];
+            closedTickets.value = [];
           }
         },
       );

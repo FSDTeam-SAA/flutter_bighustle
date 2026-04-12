@@ -26,7 +26,6 @@ import 'moduls/profile/presentation/screen/profile_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Payment bootstrap disabled for the free review build.
   externalServiceDI();
   initServices();
   runApp(const MyApp());
@@ -136,8 +135,6 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(
               builder: (_) => const TicketNotificationScreen(),
             );
-          // case AppRoutes.planPricing:
-          //   return MaterialPageRoute(builder: (_) => const PlanPricingScreen());
           case AppRoutes.community:
             return MaterialPageRoute(
               builder: (_) => const TeenDriverPostsScreen(),

@@ -27,11 +27,6 @@ class ProfileData extends ChangeNotifier {
   bool inactiveAlerts = false;
   bool teenDriverAlerts = false;
   bool communityAlerts = false;
-  bool subscribed = true;
-  String planName = '';
-  String subscriptionInterval = '';
-  String subscriptionStartsAt = '';
-  String subscriptionEndsAt = '';
   bool hasLoaded = false;
 
   void updateProfile({
@@ -57,11 +52,6 @@ class ProfileData extends ChangeNotifier {
     inactiveAlerts = profile.inactiveAlerts;
     teenDriverAlerts = profile.teenDriverAlerts;
     communityAlerts = profile.communityAlerts;
-    subscribed = true;
-    planName = '';
-    subscriptionInterval = '';
-    subscriptionStartsAt = '';
-    subscriptionEndsAt = '';
     if (profile.dateOfBirth != null) {
       final date = profile.dateOfBirth!;
       dateOfBirth =
@@ -88,28 +78,11 @@ class ProfileData extends ChangeNotifier {
     inactiveAlerts = false;
     teenDriverAlerts = false;
     communityAlerts = false;
-    subscribed = true;
-    planName = '';
-    subscriptionInterval = '';
-    subscriptionStartsAt = '';
-    subscriptionEndsAt = '';
     hasLoaded = true;
     notifyListeners();
   }
 
-  void updateSubscription({
-    required bool subscribed,
-    String? planName,
-    String? subscriptionInterval,
-    String? subscriptionStartsAt,
-    String? subscriptionEndsAt,
-    bool notify = true,
-  }) {
-    this.subscribed = true;
-    this.planName = '';
-    this.subscriptionInterval = '';
-    this.subscriptionStartsAt = '';
-    this.subscriptionEndsAt = '';
+  void markLoaded({bool notify = true}) {
     hasLoaded = true;
     if (notify) {
       notifyListeners();

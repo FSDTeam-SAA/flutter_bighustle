@@ -275,10 +275,10 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                         )
                       else
                         ...ticketsToShow.map((ticket) {
-                          final isPaid = ticket.isPaid;
+                          final isClosed = ticket.isClosed;
                           return TicketRow(
-                            status: isPaid ? 'Closed' : 'Open',
-                            statusColor: isPaid
+                            status: isClosed ? 'Closed' : 'Open',
+                            statusColor: isClosed
                                 ? const Color(0xFF1DB954)
                                 : const Color(0xFFB7791F),
                             ticketId: ticket.ticketNo.isNotEmpty

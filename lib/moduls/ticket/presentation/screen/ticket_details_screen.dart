@@ -41,10 +41,6 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
     return '$month $day, $year';
   }
 
-  String _formatCurrency(int amount) {
-    return r'$' + amount.toStringAsFixed(2);
-  }
-
   int _calculateDaysLeft(DateTime dueDate) {
     final now = DateTime.now();
     final difference = dueDate.difference(now);
@@ -187,7 +183,7 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
                       Row(
                         children: [
                           const Text(
-                            'Status',
+                            'State',
                             style: TextStyle(
                               color: Color(0xFF6C6C6C),
                               fontSize: 16,
@@ -198,29 +194,21 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: _ticket!.isPaid
+                              color: _ticket!.isClosed
                                   ? const Color(0xFF2CC56F)
-                                  : const Color(0xFFE05A5A),
+                                  : const Color(0xFFB7791F),
                               shape: BoxShape.circle,
                             ),
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            _ticket!.status == 'paid' ? 'Paid' : 'Unpaid',
+                            _ticket!.isClosed ? 'Closed' : 'Open',
                             style: const TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 16,
                             ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Amount: ${_formatCurrency(_ticket!.amount)}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
                       ),
                       const SizedBox(height: 14),
                       const Text(
