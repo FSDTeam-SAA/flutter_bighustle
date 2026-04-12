@@ -119,10 +119,6 @@ class _TeenDriversScreenState extends State<TeenDriversScreen> {
           ),
         ),
         leading: BackButton(color: const Color(0xFF222222)),
-        // IconButton(
-        //   icon: const Icon(Icons.arrow_back, color: Color(0xFF111111)),
-        //   onPressed: () => Navigator.pop(context),
-        // ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -454,7 +450,7 @@ class _TeenDriversScreenState extends State<TeenDriversScreen> {
                               ),
                             ),
                             SizedBox(height: size.height * 0.01),
-                            if (_isValidImageUrl(latestPost!.mediaUrl))
+                            if (_isValidImageUrl(latestPost.mediaUrl))
                               Container(
                                 height: size.height * 0.18,
                                 width: double.infinity,
