@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_routes.dart';
-import '../../../core/helpers/subscription_access.dart';
 import '../../../core/notifiers/snackbar_notifier.dart';
 import '../../../core/services/app_pigeon/app_pigeon.dart';
 import '../controller/home_controller.dart';
@@ -92,15 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return '$message - $timeAgo';
   }
 
-  Future<void> _openSubscriptionFeature({
-    required String featureName,
-    required String route,
-  }) async {
-    final canProceed = await SubscriptionAccess.ensureSubscribedAction(
-      context: context,
-      featureName: featureName,
-    );
-    if (!canProceed || !mounted) return;
+  void _openFeature(String route) {
     Navigator.pushNamed(context, route);
   }
 
@@ -382,10 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: const Color(0xFF1B8E3E),
                     ),
                     iconBackground: const Color(0xFFE8F7ED),
-                    onTap: () => _openSubscriptionFeature(
-                      featureName: 'License status',
-                      route: AppRoutes.license,
-                    ),
+                    onTap: () => _openFeature(AppRoutes.license),
                   ),
 
                   _QuickAccessCard(
@@ -398,10 +386,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: const Color(0xFF5C6BF2),
                     ),
                     iconBackground: const Color(0xFFEFF2FF),
-                    onTap: () => _openSubscriptionFeature(
-                      featureName: 'Ticket assistance',
-                      route: AppRoutes.ticket,
-                    ),
+                    onTap: () => _openFeature(AppRoutes.ticket),
                   ),
 
                   _QuickAccessCard(

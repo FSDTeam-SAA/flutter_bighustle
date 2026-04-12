@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../../core/constants/app_routes.dart';
-import '../../../../core/helpers/subscription_access.dart';
+
 import '../../../../core/notifiers/snackbar_notifier.dart';
 import '../../interface/ticket_interface.dart';
 import '../../model/ticket_model.dart';
-import '../widget/ticket_action_button.dart';
 
 class TicketDetailsScreen extends StatefulWidget {
   final String ticketId;
@@ -20,8 +18,6 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
   TicketModel? _ticket;
   bool _isLoading = true;
   bool _isInitialized = false;
-  bool _subscriptionChecked = false;
-  bool _isSubscribed = false;
   late final SnackbarNotifier _snackbarNotifier;
 
   String _formatDateShort(DateTime date) {
@@ -56,15 +52,13 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
   }
 
   String _parseWarnings(String warnings) {
-    // Parse warnings like "May Supand, Late fees apply after due"
-    // Split by comma and return parts
     return warnings;
   }
 
   @override
   void initState() {
     super.initState();
-    _resolveSubscription();
+    _loadTicketDetails();
   }
 
   @override
@@ -77,13 +71,6 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
   }
 
   Future<void> _loadTicketDetails() async {
-    if (!_isSubscribed) {
-      setState(() {
-        _isLoading = false;
-      });
-      return;
-    }
-
     if (widget.ticketId.isEmpty) {
       setState(() {
         _isLoading = false;
@@ -128,53 +115,6 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
     }
   }
 
-  Future<void> _resolveSubscription() async {
-    final subscribed = await SubscriptionAccess.syncFromCurrentAuth();
-    if (!mounted) return;
-    setState(() {
-      _subscriptionChecked = true;
-      _isSubscribed = subscribed;
-      _isLoading = subscribed;
-    });
-    if (subscribed) {
-      await _loadTicketDetails();
-    }
-  }
-
-  Widget _buildLockedBody() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.lock_outline, size: 48, color: Color(0xFF1F6FEB)),
-            const SizedBox(height: 12),
-            const Text(
-              'Ticket details are locked.',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Subscribe to check ticket details and use ticket payment actions.',
-              style: TextStyle(color: Color(0xFF667085)),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => SubscriptionAccess.ensureSubscribedAction(
-                context: context,
-                featureName: 'Ticket details',
-              ),
-              child: const Text('View Plans'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -193,11 +133,7 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
           ),
         ),
       ),
-      body: !_subscriptionChecked
-          ? const Center(child: CircularProgressIndicator())
-          : !_isSubscribed
-          ? _buildLockedBody()
-          : _isLoading
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _ticket == null
           ? const Center(
@@ -353,25 +289,6 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
                         label: 'Point on license:',
                         value: '${_ticket!.pointsOnLicense}',
                       ),
-                      const SizedBox(height: 24),
-                      if (!_ticket!.isPaid)
-                        SizedBox(
-                          width: double.infinity,
-                          child: TicketActionButton(
-                            label: 'Pay now',
-                            onPressed: () async {
-                              final canProceed =
-                                  await SubscriptionAccess.ensureSubscribedAction(
-                                    context: context,
-                                    featureName: 'Ticket payment',
-                                  );
-                              if (!canProceed || !context.mounted) return;
-                              Navigator.of(
-                                context,
-                              ).pushNamed(AppRoutes.planPricing);
-                            },
-                          ),
-                        ),
                     ],
                   ),
                 ),
