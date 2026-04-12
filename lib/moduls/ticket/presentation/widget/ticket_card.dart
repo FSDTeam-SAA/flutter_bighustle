@@ -24,7 +24,9 @@ class TicketCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color statusColor = isPaid ? const Color(0xFF2CC56F) : const Color(0xFFE05A5A);
+    final Color statusColor = isPaid
+        ? const Color(0xFF2CC56F)
+        : const Color(0xFFE05A5A);
     final String statusLabel = isPaid ? 'Paid' : 'Unpaid';
 
     return Container(
@@ -57,7 +59,10 @@ class TicketCard extends StatelessWidget {
               const SizedBox(width: 12),
               Text(
                 ticketId,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
               ),
             ],
           ),
@@ -73,36 +78,53 @@ class TicketCard extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: 6),
               Text(
                 statusLabel,
-                style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: TicketActionButton(
-                  label: 'Pay now',
-                  isPrimary: true,
-                  isDisabled: isPaid,
-                  onPressed: onPayNow,
+          if (onPayNow != null) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: TicketActionButton(
+                    label: 'Pay now',
+                    isPrimary: true,
+                    isDisabled: isPaid,
+                    onPressed: onPayNow,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TicketActionButton(
-                  label: 'View Details',
-                  isPrimary: true,
-                  onPressed: onViewDetails,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TicketActionButton(
+                    label: 'View Details',
+                    isPrimary: true,
+                    onPressed: onViewDetails,
+                  ),
                 ),
+              ],
+            ),
+          ] else ...[
+            SizedBox(
+              width: double.infinity,
+              child: TicketActionButton(
+                label: 'View Details',
+                isPrimary: true,
+                onPressed: onViewDetails,
               ),
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );
@@ -113,24 +135,15 @@ class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
+  const _InfoRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(
-          label,
-          style: const TextStyle(color: Color(0xFF6C6C6C)),
-        ),
+        Text(label, style: const TextStyle(color: Color(0xFF6C6C6C))),
         const SizedBox(width: 6),
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
       ],
     );
   }

@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../../core/helpers/subscription_access.dart';
 import '../../../../core/notifiers/snackbar_notifier.dart';
 import '../../../../core/services/app_pigeon/app_pigeon.dart';
 import '../../interface/license_interface.dart';
@@ -32,13 +31,6 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
   String? _selectedLicensePhotoPath;
   DateTime? _selectedDateOfBirth;
   DateTime? _selectedExpireDate;
-
-  Future<bool> _ensureSubscribed(String featureName) async {
-    return SubscriptionAccess.ensureSubscribedAction(
-      context: context,
-      featureName: featureName,
-    );
-  }
 
   DateTime? _parseFormattedDateToDateTime(String formattedDate) {
     if (formattedDate.isEmpty || formattedDate == 'N/A') {
@@ -159,9 +151,6 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
   }
 
   Future<void> _pickUserPhoto() async {
-    final canProceed = await _ensureSubscribed('License photo upload');
-    if (!canProceed || !mounted) return;
-
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -180,9 +169,6 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
   }
 
   Future<void> _pickLicensePhoto() async {
-    final canProceed = await _ensureSubscribed('License photo upload');
-    if (!canProceed || !mounted) return;
-
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -302,8 +288,6 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
 
   Future<void> _saveAndClose() async {
     if (_isLoading) return;
-    final canProceed = await _ensureSubscribed('License information update');
-    if (!canProceed || !mounted) return;
 
     // Validate required fields
     if (_nameController.text.trim().isEmpty) {

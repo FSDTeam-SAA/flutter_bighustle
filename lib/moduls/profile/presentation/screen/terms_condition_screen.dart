@@ -60,11 +60,11 @@ class TermsConditionScreen extends StatelessWidget {
           ),
           PolicySection(
             number: '5',
-            title: 'Orders & Payments',
+            title: 'Platform Operations',
             body:
-                'All payments are processed securely. Admin holds funds '
-                'before releasing them to vendors. Refunds, cancellations, and '
-                'disputes follow set policies.',
+                'Platform activity is managed securely. Account actions, '
+                'cancellations, and disputes follow the applicable platform '
+                'policies.',
           ),
           PolicySection(
             number: '6',
@@ -87,25 +87,29 @@ class TermsConditionScreen extends StatelessWidget {
             body:
                 'The platform enables in-app messaging. Abuse, harassment, '
                 'or spam will result in account action.',
-          ),PolicySection(
+          ),
+          PolicySection(
             number: '9',
             title: 'Termination',
             body:
                 'The platform enables in-app messaging. Abuse, harassment, '
                 'or spam will result in account action.',
-          ),PolicySection(
+          ),
+          PolicySection(
             number: '10',
             title: 'Changes to Terms',
             body:
                 'The platform enables in-app messaging. Abuse, harassment, '
                 'or spam will result in account action.',
-          ),PolicySection(
+          ),
+          PolicySection(
             number: '11',
             title: 'Governing Law',
             body:
                 'The platform enables in-app messaging. Abuse, harassment, '
                 'or spam will result in account action.',
-          ),PolicySection(
+          ),
+          PolicySection(
             number: '12',
             title: 'Contact Us',
             body:

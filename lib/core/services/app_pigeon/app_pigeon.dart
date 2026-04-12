@@ -125,6 +125,7 @@ class AppPigeon {
   Stream<dynamic> listen(String channelName) {
     return _socketService.listen(channelName); // forward events, not just yield the stream object
   }
+  
   /// Emit an event through socket
   void emit(String eventName, [dynamic data]) {
     _socketService.emit(eventName, data);

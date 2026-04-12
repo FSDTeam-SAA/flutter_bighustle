@@ -9,7 +9,8 @@ class TicketNotificationScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final notifications = [
       const _NotificationData(
-        message: 'Your license status just updated — please check the latest details.',
+        message:
+            'Your license status just updated — please check the latest details.',
         time: '2 hours ago',
         isHighlighted: true,
       ),
@@ -19,12 +20,13 @@ class TicketNotificationScreen extends StatelessWidget {
         isHighlighted: true,
       ),
       const _NotificationData(
-        message: 'Your fine is due in 3 days. Pay now to avoid penalties.',
+        message:
+            'Your fine is due in 3 days. Review the details to stay ahead.',
         time: '2 hours ago',
         isHighlighted: true,
       ),
       const _NotificationData(
-        message: 'Ticket payment confirmed! Keep driving safely.',
+        message: 'Ticket status updated successfully. Keep driving safely.',
         time: '3 hours ago',
       ),
       const _NotificationData(
@@ -36,7 +38,8 @@ class TicketNotificationScreen extends StatelessWidget {
         time: '3 hours ago',
       ),
       const _NotificationData(
-        message: 'Your fine is due in 3 days. Pay now to avoid penalties.',
+        message:
+            'Your fine is due in 3 days. Review the details to stay ahead.',
         time: '3 hours ago',
       ),
       const _NotificationData(
@@ -44,7 +47,8 @@ class TicketNotificationScreen extends StatelessWidget {
         time: '3 hours ago',
       ),
       const _NotificationData(
-        message: 'Your fine is due in 3 days. Pay now to avoid penalties.',
+        message:
+            'Your fine is due in 3 days. Review the details to stay ahead.',
         time: '3 hours ago',
       ),
     ];
@@ -63,7 +67,10 @@ class TicketNotificationScreen extends StatelessWidget {
             Expanded(
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 14),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0F0F0),
                   borderRadius: BorderRadius.circular(12),
@@ -80,7 +87,10 @@ class TicketNotificationScreen extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF3F76F6),
                             borderRadius: BorderRadius.circular(6),
@@ -96,7 +106,8 @@ class TicketNotificationScreen extends StatelessWidget {
                     Expanded(
                       child: ListView.separated(
                         itemCount: notifications.length,
-                        separatorBuilder: (_, __) => const Divider(height: 16, color: Color(0xFFD9D9D9)),
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 16, color: Color(0xFFD9D9D9)),
                         itemBuilder: (context, index) {
                           final item = notifications[index];
                           return NotificationListItem(

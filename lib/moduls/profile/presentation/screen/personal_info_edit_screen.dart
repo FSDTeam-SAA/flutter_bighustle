@@ -74,8 +74,8 @@ class _PersonalInfoEditScreenState extends State<PersonalInfoEditScreen> {
     final dob = _dobController.text.trim();
     final avatarPath = _selectedAvatarPath ?? _profileData.avatarPath;
 
-    print("Avatar path _selectedAvatarPath : from Personal Info Edit Screen : $_selectedAvatarPath");
-    print("Avatar path : from Personal Info Edit Screen : $avatarPath");
+    // print("Avatar path _selectedAvatarPath : from Personal Info Edit Screen : $_selectedAvatarPath");
+    // print("Avatar path : from Personal Info Edit Screen : $avatarPath");
 
     setState(() => _isSaving = true);
     final profileInterface = Get.find<ProfileInterface>();
