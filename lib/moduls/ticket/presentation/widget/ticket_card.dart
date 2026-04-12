@@ -5,7 +5,6 @@ import 'ticket_action_button.dart';
 class TicketCard extends StatelessWidget {
   final String ticketId;
   final String type;
-  final String amount;
   final String dueDate;
   final bool isPaid;
   final VoidCallback? onPayNow;
@@ -15,7 +14,6 @@ class TicketCard extends StatelessWidget {
     super.key,
     required this.ticketId,
     required this.type,
-    required this.amount,
     required this.dueDate,
     this.isPaid = false,
     this.onPayNow,
@@ -26,8 +24,8 @@ class TicketCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color statusColor = isPaid
         ? const Color(0xFF2CC56F)
-        : const Color(0xFFE05A5A);
-    final String statusLabel = isPaid ? 'Paid' : 'Unpaid';
+        : const Color(0xFFB7791F);
+    final String statusLabel = isPaid ? 'Closed' : 'Open';
     final showPayAction = !isPaid && onPayNow != null;
 
     return Container(
@@ -70,9 +68,7 @@ class TicketCard extends StatelessWidget {
           const SizedBox(height: 12),
           _InfoRow(label: 'Type:', value: type),
           const SizedBox(height: 6),
-          _InfoRow(label: 'Amount:', value: amount),
-          const SizedBox(height: 6),
-          _InfoRow(label: 'Due:', value: dueDate),
+          _InfoRow(label: 'Deadline:', value: dueDate),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -109,7 +105,7 @@ class TicketCard extends StatelessWidget {
               ],
               Expanded(
                 child: TicketActionButton(
-                  label: 'View Details',
+                  label: 'Open Details',
                   isPrimary: true,
                   onPressed: onViewDetails,
                 ),

@@ -10,7 +10,7 @@ class TicketHeader extends StatelessWidget {
         Expanded(
           flex: 2,
           child: Text(
-            'Status',
+            'State',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
           ),
         ),
@@ -31,7 +31,7 @@ class TicketHeader extends StatelessWidget {
         Expanded(
           flex: 2,
           child: Text(
-            'Fees',
+            'Deadline',
             textAlign: TextAlign.end,
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
           ),
@@ -48,14 +48,14 @@ class TicketRow extends StatelessWidget {
     required this.statusColor,
     required this.ticketId,
     required this.location,
-    required this.fee,
+    required this.deadline,
   });
 
   final String status;
   final Color statusColor;
   final String ticketId;
   final String location;
-  final String fee;
+  final String deadline;
 
   @override
   Widget build(BuildContext context) {
@@ -76,10 +76,7 @@ class TicketRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  status,
-                  style: const TextStyle(fontSize: 12),
-                ),
+                Text(status, style: const TextStyle(fontSize: 12)),
               ],
             ),
           ),
@@ -94,7 +91,7 @@ class TicketRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Text(
-              fee,
+              deadline,
               textAlign: TextAlign.end,
               style: const TextStyle(fontSize: 12),
             ),

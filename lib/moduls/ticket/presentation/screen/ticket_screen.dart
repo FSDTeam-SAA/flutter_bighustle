@@ -40,10 +40,6 @@ class _TicketScreenState extends State<TicketScreen> {
     return '$month $day,$year';
   }
 
-  String _formatCurrency(int amount) {
-    return r'$' + amount.toStringAsFixed(2);
-  }
-
   @override
   void initState() {
     super.initState();
@@ -134,15 +130,47 @@ class _TicketScreenState extends State<TicketScreen> {
                                 ),
                                 const SizedBox(height: 18),
                               ],
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0xFFD4E4FF),
+                                  ),
+                                ),
+                                child: const Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline,
+                                      color: Color(0xFF1F6FEB),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Track your ticket records, review deadlines, and check status updates here.',
+                                        style: TextStyle(
+                                          color: Color(0xFF33527B),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
                               TicketSummaryCard(
-                                openTickets: summary.openTickets,
-                                totalDue: _formatCurrency(summary.totalDue),
-                                overdue: summary.overdue,
+                                openRecords: unpaidTickets.length,
+                                closedRecords: paidTickets.length,
+                                needsAttention: summary.overdue > 0
+                                    ? summary.overdue
+                                    : summary.openTickets,
                               ),
                               const SizedBox(height: 16),
                               if (unpaidTickets.isNotEmpty) ...[
                                 const Text(
-                                  'Active',
+                                  'Open Records',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
@@ -155,7 +183,6 @@ class _TicketScreenState extends State<TicketScreen> {
                                     child: TicketCard(
                                       ticketId: ticket.ticketNo,
                                       type: ticket.type,
-                                      amount: _formatCurrency(ticket.amount),
                                       dueDate: _formatDateShort(ticket.dueAt),
                                       isPaid: false,
                                       onViewDetails: () {
@@ -171,7 +198,7 @@ class _TicketScreenState extends State<TicketScreen> {
                               ],
                               if (paidTickets.isNotEmpty) ...[
                                 const Text(
-                                  'Paid',
+                                  'Closed Records',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
@@ -184,7 +211,6 @@ class _TicketScreenState extends State<TicketScreen> {
                                     child: TicketCard(
                                       ticketId: ticket.ticketNo,
                                       type: ticket.type,
-                                      amount: _formatCurrency(ticket.amount),
                                       dueDate: _formatDateShort(ticket.dueAt),
                                       isPaid: true,
                                       onViewDetails: () {

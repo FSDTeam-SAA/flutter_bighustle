@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
 class TicketSummaryCard extends StatelessWidget {
-  final int openTickets;
-  final String totalDue;
-  final int overdue;
+  final int openRecords;
+  final int closedRecords;
+  final int needsAttention;
 
   const TicketSummaryCard({
     super.key,
-    required this.openTickets,
-    required this.totalDue,
-    required this.overdue,
+    required this.openRecords,
+    required this.closedRecords,
+    required this.needsAttention,
   });
 
   @override
@@ -31,15 +31,15 @@ class TicketSummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Your Summary',
+            'Ticket Overview',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
           ),
           const SizedBox(height: 12),
-          _SummaryRow(label: 'Open Tickets:', value: '$openTickets'),
+          _SummaryRow(label: 'Open Records:', value: '$openRecords'),
           const SizedBox(height: 8),
-          _SummaryRow(label: 'Total Due:', value: totalDue),
+          _SummaryRow(label: 'Closed Records:', value: '$closedRecords'),
           const SizedBox(height: 8),
-          _SummaryRow(label: 'Overdue:', value: '$overdue'),
+          _SummaryRow(label: 'Needs Attention:', value: '$needsAttention'),
         ],
       ),
     );
@@ -50,24 +50,15 @@ class _SummaryRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _SummaryRow({
-    required this.label,
-    required this.value,
-  });
+  const _SummaryRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: const TextStyle(color: Color(0xFF6C6C6C)),
-        ),
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
+        Text(label, style: const TextStyle(color: Color(0xFF6C6C6C))),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
       ],
     );
   }

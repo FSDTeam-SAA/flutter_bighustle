@@ -21,8 +21,7 @@ class PersonalInfoScreen extends StatefulWidget {
 
 class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
   static const Color _background = Color(0xFFF2F2F2);
-  static const String _drivingLicenseAsset =
-      'assets/images/drivingLicence.png';
+  static const String _drivingLicenseAsset = 'assets/images/drivingLicence.png';
 
   late final SnackbarNotifier _snackbarNotifier;
   bool _isInitialized = false;
@@ -30,6 +29,25 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
   bool _isTicketsLoading = false;
   LicenseResponseModel? _license;
   List<TicketModel> _tickets = [];
+
+  String _formatDateShort(DateTime date) {
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final month = months[date.month - 1];
+    return '$month ${date.day}';
+  }
 
   @override
   void initState() {
@@ -107,10 +125,7 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
 
   Future<void> _loadAll() async {
     await _loadProfile();
-    await Future.wait([
-      _loadLicense(),
-      _loadTickets(),
-    ]);
+    await Future.wait([_loadLicense(), _loadTickets()]);
   }
 
   @override
@@ -157,8 +172,9 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                   animation: profileData,
                   builder: (context, _) {
                     final userId = profileData.userId;
-                    final trimmedUserId =
-                        userId.length > 8 ? userId.substring(0, 8) : userId;
+                    final trimmedUserId = userId.length > 8
+                        ? userId.substring(0, 8)
+                        : userId;
                     return Column(
                       children: [
                         Center(
@@ -222,10 +238,9 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                 else
                   DrivingLicenseCard(
                     imageUrl: _license?.licensePhoto ?? '',
-                    imageAssetPath:
-                        _license?.licensePhoto.isNotEmpty == true
-                            ? ''
-                            : _drivingLicenseAsset,
+                    imageAssetPath: _license?.licensePhoto.isNotEmpty == true
+                        ? ''
+                        : _drivingLicenseAsset,
                   ),
                 const SizedBox(height: 16),
                 Container(
@@ -252,23 +267,27 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                           padding: EdgeInsets.symmetric(vertical: 12),
                           child: Text(
                             'No tickets found',
-                            style: TextStyle(fontSize: 12, color: Colors.black54),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                            ),
                           ),
                         )
                       else
                         ...ticketsToShow.map((ticket) {
                           final isPaid = ticket.isPaid;
                           return TicketRow(
-                            status: isPaid ? 'Paid' : 'Unpaid',
+                            status: isPaid ? 'Closed' : 'Open',
                             statusColor: isPaid
                                 ? const Color(0xFF1DB954)
-                                : const Color(0xFFE53935),
+                                : const Color(0xFFB7791F),
                             ticketId: ticket.ticketNo.isNotEmpty
                                 ? ticket.ticketNo
                                 : ticket.id,
-                            location:
-                                ticket.city.isNotEmpty ? ticket.city : 'N/A',
-                            fee: '\$${ticket.amount.toStringAsFixed(2)}',
+                            location: ticket.city.isNotEmpty
+                                ? ticket.city
+                                : 'N/A',
+                            deadline: _formatDateShort(ticket.dueAt),
                           );
                         }),
                     ],
