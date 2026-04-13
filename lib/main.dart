@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:flutter_bighustle/core/constants/app_routes.dart';
 import 'package:flutter_bighustle/core/di/external_service_di.dart';
 import 'package:flutter_bighustle/core/di/internal_service_di.dart';
-import 'package:flutter_bighustle/core/constants/stripe_config.dart';
 import 'package:flutter_bighustle/moduls/auth/presentation/screen/forget_password.dart';
 import 'package:flutter_bighustle/moduls/auth/presentation/screen/login_screen.dart';
 import 'package:flutter_bighustle/moduls/auth/presentation/screen/otp_verify_screen.dart';
@@ -29,12 +27,6 @@ import 'moduls/profile/presentation/screen/profile_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  debugPrint(
-    'Stripe publishableKey prefix: ${StripeConfig.publishableKey.substring(0, 15)}',
-  );
-  Stripe.publishableKey = StripeConfig.publishableKey;
-  Stripe.urlScheme = 'flutterstripe';
-  await Stripe.instance.applySettings();
   externalServiceDI();
   initServices();
   runApp(const MyApp());
