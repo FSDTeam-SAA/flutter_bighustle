@@ -19,7 +19,6 @@ import 'package:flutter_bighustle/moduls/license/presentation/screen/edit_licens
 import 'package:flutter_bighustle/moduls/license/presentation/screen/license_screen.dart';
 import 'package:flutter_bighustle/moduls/license/presentation/screen/liscense_alearts_screen.dart';
 import 'package:flutter_bighustle/moduls/ticket/presentation/screen/notification_screen.dart';
-import 'package:flutter_bighustle/moduls/ticket/presentation/screen/plan_pricing_details_screen.dart';
 import 'package:flutter_bighustle/moduls/ticket/presentation/screen/ticket_details_screen.dart';
 import 'package:flutter_bighustle/moduls/ticket/presentation/screen/ticket_screen.dart';
 import 'package:flutter_bighustle/moduls/notification/presentation/screen/notification_screen.dart';
@@ -135,12 +134,6 @@ class MyApp extends StatelessWidget {
           case AppRoutes.ticketNotifications:
             return MaterialPageRoute(
               builder: (_) => const TicketNotificationScreen(),
-            );
-          // case AppRoutes.planPricing:
-          //   return MaterialPageRoute(builder: (_) => const PlanPricingScreen());
-          case AppRoutes.planPricingDetails:
-            return MaterialPageRoute(
-              builder: (_) => const PlanPricingDetailsScreen(),
             );
           case AppRoutes.community:
             return MaterialPageRoute(

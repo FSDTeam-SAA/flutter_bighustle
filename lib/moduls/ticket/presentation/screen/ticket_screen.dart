@@ -4,7 +4,6 @@ import '../../../../core/helpers/subscription_access.dart';
 import '../../../../core/notifiers/snackbar_notifier.dart';
 import '../../../profile/model/profile_data.dart';
 import '../controller/ticket_controller.dart';
-import '../widget/payment_method_dialog.dart';
 import '../widget/ticket_card.dart';
 import '../widget/ticket_summary_card.dart';
 import '../../model/ticket_model.dart';
@@ -19,7 +18,6 @@ class TicketScreen extends StatefulWidget {
 }
 
 class _TicketScreenState extends State<TicketScreen> {
-  bool _isPaypalselected = false;
   bool _isInitialized = false;
   late final SnackbarNotifier _snackbarNotifier;
 
@@ -143,7 +141,7 @@ class _TicketScreenState extends State<TicketScreen> {
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: const Text(
-                                    'Ticket check and action buttons are locked for unsubscribed users.',
+                                    'Ticket access is locked for unsubscribed users.',
                                     style: TextStyle(
                                       color: Color(0xFF8A5B00),
                                       fontWeight: FontWeight.w600,
@@ -188,45 +186,6 @@ class _TicketScreenState extends State<TicketScreen> {
                                       amount: _formatCurrency(ticket.amount),
                                       dueDate: _formatDateShort(ticket.dueAt),
                                       isPaid: false,
-                                      onPayNow: () async {
-                                        final canProceed =
-                                            await _ensureTicketAccess(
-                                              'Ticket payment',
-                                            );
-                                        if (!canProceed || !context.mounted) {
-                                          return;
-                                        }
-                                        showDialog(
-                                          context: context,
-                                          barrierDismissible: true,
-                                          builder: (dialogContext) {
-                                            return StatefulBuilder(
-                                              builder: (context, setDialogState) {
-                                                return PaymentMethodDialog(
-                                                  isSelected: _isPaypalselected,
-                                                  onSelectChanged: (val) {
-                                                    _isPaypalselected = val;
-                                                    setState(
-                                                      () => _isPaypalselected =
-                                                          !_isPaypalselected,
-                                                    );
-                                                  },
-                                                  onClose: () => Navigator.of(
-                                                    context,
-                                                  ).pop(dialogContext),
-                                                  onPay: () =>
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pushNamed(
-                                                        AppRoutes
-                                                            .planPricingDetails,
-                                                      ),
-                                                );
-                                              },
-                                            );
-                                          },
-                                        );
-                                      },
                                       onViewDetails: () async {
                                         final canProceed =
                                             await _ensureTicketAccess(

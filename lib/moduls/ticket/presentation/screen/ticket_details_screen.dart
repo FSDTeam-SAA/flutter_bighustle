@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../../core/constants/app_routes.dart';
 import '../../../../core/helpers/subscription_access.dart';
 import '../../../../core/notifiers/snackbar_notifier.dart';
 import '../../interface/ticket_interface.dart';
 import '../../model/ticket_model.dart';
-import '../widget/ticket_action_button.dart';
 
 class TicketDetailsScreen extends StatefulWidget {
   final String ticketId;
@@ -157,7 +155,7 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Subscribe to check ticket details and use ticket payment actions.',
+              'Subscribe to view ticket details inside the app.',
               style: TextStyle(color: Color(0xFF667085)),
               textAlign: TextAlign.center,
             ),
@@ -353,25 +351,6 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
                         label: 'Point on license:',
                         value: '${_ticket!.pointsOnLicense}',
                       ),
-                      const SizedBox(height: 24),
-                      if (!_ticket!.isPaid)
-                        SizedBox(
-                          width: double.infinity,
-                          child: TicketActionButton(
-                            label: 'Pay now',
-                            onPressed: () async {
-                              final canProceed =
-                                  await SubscriptionAccess.ensureSubscribedAction(
-                                    context: context,
-                                    featureName: 'Ticket payment',
-                                  );
-                              if (!canProceed || !context.mounted) return;
-                              Navigator.of(
-                                context,
-                              ).pushNamed(AppRoutes.planPricing);
-                            },
-                          ),
-                        ),
                     ],
                   ),
                 ),
