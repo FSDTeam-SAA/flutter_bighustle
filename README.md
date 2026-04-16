@@ -225,3 +225,5 @@ Key configuration files and locations:
   - `lib/core/di/internal_service_di.dart`
 - **Assets configuration**: `pubspec.yaml`
 
+---
+
