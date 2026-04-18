@@ -43,7 +43,12 @@ dependencies:
   path_provider: ^2.1.4
   socket_io_client: ^2.0.3+1
   video_player: ^2.8.6
-  in_app_purchase: ^3.2.3
+  # Core Flutter API for querying products and handling purchases/subscriptions.
+  in_app_purchase: ^3.1.5
+  # Android platform bindings for Google Play Billing flows.
+  in_app_purchase_android: ^0.4.0
+  # iOS/macOS platform bindings for StoreKit purchase flows.
+  in_app_purchase_storekit: ^0.3.10
 
 dev_dependencies:
   flutter_test:

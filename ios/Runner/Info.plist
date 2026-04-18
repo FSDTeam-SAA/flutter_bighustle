@@ -25,6 +25,9 @@
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 
+	<!-- StoreKit purchases do not require dedicated Info.plist keys.
+	     Subscription products such as monthly/yearly plans are configured in App Store Connect. -->
+
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 
