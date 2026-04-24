@@ -2,10 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/notifiers/snackbar_notifier.dart';
+import '../../../profile/presentation/screen/privacy_policy_screen.dart';
+import '../../../profile/presentation/screen/terms_condition_screen.dart';
 import '../../service/subscription_service.dart';
 
 class SubscriptionScreen extends StatefulWidget {
@@ -18,6 +19,14 @@ class SubscriptionScreen extends StatefulWidget {
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
   static const Color _background = Color(0xFFF6F8FC);
   static const Color _yearlyAccent = Color(0xFF0F766E);
+  static const Color _mutedText = Color(0xFF475467);
+  static const Color _surfaceBorder = Color(0xFFDDE3EC);
+  static const Color _successBackground = Color(0xFFE8FFF4);
+  static const Color _successBorder = Color(0xFFB7F0D3);
+  static const Color _successText = Color(0xFF166534);
+  static const Color _warningBackground = Color(0xFFFFF8E8);
+  static const Color _warningBorder = Color(0xFFF2D38B);
+  static const Color _warningText = Color(0xFF8A5B00);
 
   late final SubscriptionService _subscriptionService;
 
@@ -25,9 +34,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   bool _isLoading = true;
   bool _isPurchasingMonthly = false;
   bool _isPurchasingYearly = false;
+  bool _isRestoringPurchases = false;
   bool _isSubscribed = false;
   String? _errorMessage;
-  List<ProductDetails> _products = const <ProductDetails>[];
 
   final Map<String, List<String>> _planFeatures = const <String, List<String>>{
     SubscriptionService.monthlyProductId: <String>[
@@ -62,12 +71,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
     try {
       await _subscriptionService.initialize();
-      final products = await _subscriptionService.getAvailableProducts();
+      await _subscriptionService.getAvailableProducts();
       final isSubscribed = await _subscriptionService.isUserSubscribed();
 
       if (!mounted) return;
       setState(() {
-        _products = products;
         _isSubscribed = isSubscribed;
       });
     } catch (error) {
@@ -94,6 +102,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     } else if (event.status != SubscriptionPurchaseStatus.pending) {
       _isPurchasingMonthly = false;
       _isPurchasingYearly = false;
+    }
+
+    if (event.status != SubscriptionPurchaseStatus.pending) {
+      _isRestoringPurchases = false;
     }
 
     setState(() {});
@@ -139,13 +151,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  ProductDetails? _productForId(String productId) {
-    for (final product in _products) {
-      if (product.id == productId) return product;
-    }
-    return null;
-  }
-
   Future<void> _purchaseMonthly() async {
     try {
       await _subscriptionService.purchaseMonthlySubscription();
@@ -162,9 +167,24 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
-  String _priceLabel(ProductDetails? product) {
-    if (product == null) return 'Unavailable';
-    return product.price;
+  Future<void> _restorePurchases() async {
+    if (_isRestoringPurchases) return;
+
+    setState(() {
+      _isRestoringPurchases = true;
+    });
+
+    try {
+      await _subscriptionService.restorePurchases();
+    } catch (_) {
+      // User-facing errors are emitted through the purchase event stream.
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRestoringPurchases = false;
+        });
+      }
+    }
   }
 
   String _periodLabel(String productId) {
@@ -173,11 +193,36 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         : 'per month';
   }
 
-  String _ctaLabel(String productId) {
+  String _ctaLabel() {
     if (_isSubscribed) return 'Subscribed';
-    return productId == SubscriptionService.yearlyProductId
-        ? 'Subscribe Now'
-        : 'Subscribe Now';
+    return 'Subscribe Now';
+  }
+
+  bool _productIsReady(String productId) {
+    return _subscriptionService.hasStoreProduct(productId);
+  }
+
+  String? _storeStatusMessage() {
+    final readyMonthly = _productIsReady(SubscriptionService.monthlyProductId);
+    final readyYearly = _productIsReady(SubscriptionService.yearlyProductId);
+
+    if (readyMonthly && readyYearly) {
+      return null;
+    }
+
+    return 'App Store product details are still loading or not available for this account. Reviewers can still use Restore Purchases or try again after App Store Connect products finish propagating.';
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+    );
+  }
+
+  Future<void> _openTerms() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const TermsConditionScreen()),
+    );
   }
 
   @override
@@ -189,6 +234,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final storeStatusMessage = _storeStatusMessage();
 
     return Scaffold(
       backgroundColor: _background,
@@ -215,39 +261,41 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               Text(
                 'Choose from affordable monthly or annual subscription options designed for individuals and families.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475467),
+                  color: _mutedText,
                   height: 1.45,
                 ),
               ),
-              const SizedBox(height: 20),
-              if (_isSubscribed)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8FFF4),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFB7F0D3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.verified_rounded,
-                        color: Color(0xFF15803D),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Your account currently has an active subscription.',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF166534),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+              const SizedBox(height: 16),
+              _InfoBanner(
+                icon: Icons.info_outline,
+                backgroundColor: _warningBackground,
+                borderColor: _warningBorder,
+                textColor: _warningText,
+                message:
+                    'Subscriptions renew automatically unless canceled at least 24 hours before the end of the current period. Payment is charged to your Apple ID account at confirmation of purchase.',
+              ),
+              if (_isSubscribed) ...[
+                const SizedBox(height: 16),
+                _InfoBanner(
+                  icon: Icons.verified_rounded,
+                  backgroundColor: _successBackground,
+                  borderColor: _successBorder,
+                  textColor: _successText,
+                  message:
+                      'Your account currently has an active subscription.',
                 ),
-              if (_isSubscribed) const SizedBox(height: 20),
+              ],
+              if (storeStatusMessage != null) ...[
+                const SizedBox(height: 16),
+                _InfoBanner(
+                  icon: Icons.hourglass_bottom_rounded,
+                  backgroundColor: _warningBackground,
+                  borderColor: _warningBorder,
+                  textColor: _warningText,
+                  message: storeStatusMessage,
+                ),
+              ],
+              const SizedBox(height: 20),
               if (_isLoading)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 48),
@@ -261,8 +309,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     final cards = <Widget>[
                       _SubscriptionPlanCard(
                         title: 'Monthly',
-                        priceLabel: _priceLabel(
-                          _productForId(SubscriptionService.monthlyProductId),
+                        priceLabel: _subscriptionService.priceLabelForProduct(
+                          SubscriptionService.monthlyProductId,
                         ),
                         billingLabel: _periodLabel(
                           SubscriptionService.monthlyProductId,
@@ -270,27 +318,33 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         features:
                             _planFeatures[SubscriptionService
                                 .monthlyProductId]!,
+                        availabilityMessage: _productIsReady(
+                          SubscriptionService.monthlyProductId,
+                        )
+                            ? 'Available through your App Store account.'
+                            : 'Waiting for App Store product details.',
                         onPressed: _isSubscribed ? null : _purchaseMonthly,
                         isLoading: _isPurchasingMonthly,
-                        buttonLabel: _ctaLabel(
-                          SubscriptionService.monthlyProductId,
-                        ),
+                        buttonLabel: _ctaLabel(),
                       ),
                       _SubscriptionPlanCard(
                         title: 'Yearly',
-                        priceLabel: _priceLabel(
-                          _productForId(SubscriptionService.yearlyProductId),
+                        priceLabel: _subscriptionService.priceLabelForProduct(
+                          SubscriptionService.yearlyProductId,
                         ),
                         billingLabel: _periodLabel(
                           SubscriptionService.yearlyProductId,
                         ),
                         features:
                             _planFeatures[SubscriptionService.yearlyProductId]!,
+                        availabilityMessage: _productIsReady(
+                          SubscriptionService.yearlyProductId,
+                        )
+                            ? 'Best value billed once yearly through Apple.'
+                            : 'Waiting for App Store product details.',
                         onPressed: _isSubscribed ? null : _purchaseYearly,
                         isLoading: _isPurchasingYearly,
-                        buttonLabel: _ctaLabel(
-                          SubscriptionService.yearlyProductId,
-                        ),
+                        buttonLabel: _ctaLabel(),
                         badgeText: 'Most Popular',
                         accentColor: _yearlyAccent,
                       ),
@@ -316,6 +370,68 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     );
                   },
                 ),
+              const SizedBox(height: 18),
+              OutlinedButton.icon(
+                onPressed: _isLoading || _isRestoringPurchases
+                    ? null
+                    : _restorePurchases,
+                icon: _isRestoringPurchases
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.restore_rounded),
+                label: Text(
+                  _isRestoringPurchases
+                      ? 'Restoring Purchases...'
+                      : 'Restore Purchases',
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: _surfaceBorder),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Manage Subscription',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF101828),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Your subscription is billed to your Apple ID account. It renews automatically unless canceled at least 24 hours before the end of the current period. You can manage or cancel your subscription from App Store account settings after purchase.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: _mutedText,
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        OutlinedButton(
+                          onPressed: _openTerms,
+                          child: const Text('Terms & Condition'),
+                        ),
+                        OutlinedButton(
+                          onPressed: _openPrivacyPolicy,
+                          child: const Text('Privacy Policy'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 24),
               OutlinedButton.icon(
                 onPressed: () {
@@ -332,12 +448,60 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 }
 
+class _InfoBanner extends StatelessWidget {
+  const _InfoBanner({
+    required this.icon,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.textColor,
+    required this.message,
+  });
+
+  final IconData icon;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Color textColor;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: textColor),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: textColor,
+                fontWeight: FontWeight.w600,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SubscriptionPlanCard extends StatelessWidget {
   const _SubscriptionPlanCard({
     required this.title,
     required this.priceLabel,
     required this.billingLabel,
     required this.features,
+    required this.availabilityMessage,
     required this.onPressed,
     required this.isLoading,
     required this.buttonLabel,
@@ -349,6 +513,7 @@ class _SubscriptionPlanCard extends StatelessWidget {
   final String priceLabel;
   final String billingLabel;
   final List<String> features;
+  final String availabilityMessage;
   final VoidCallback? onPressed;
   final bool isLoading;
   final String buttonLabel;
@@ -422,6 +587,14 @@ class _SubscriptionPlanCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            availabilityMessage,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF667085),
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 18),

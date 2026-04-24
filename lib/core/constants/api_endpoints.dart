@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 base class ApiEndpoints {
+  // static const String socketUrl = _LocalHostWifi.socketUrl;
   static const String socketUrl = _LiveHostUrls.socketUrl;
-  // static const String socketUrl = _LiveHostUrls.socketUrl;
 
   static const String baseUrl = _LiveHostUrls.baseUrl;
 
@@ -208,6 +208,14 @@ base class ApiEndpoints {
   /// ### get
   static String getTicketById(String ticketId) =>
       _Ticket.getTicketById(ticketId);
+
+  // ---------------------- PLANS / SUBSCRIPTIONS -----------------------------
+  /// ### get
+  static const String storeSubscriptionProducts =
+      _Plan.storeSubscriptionProducts;
+
+  /// ### post
+  static const String confirmStoreSubscription = _Plan.confirmStoreSubscription;
 }
 
 // ---------------------- Local Host URLs -----------------------------
@@ -218,8 +226,8 @@ base class ApiEndpoints {
 //   // static const String socketUrl = 'http://192.168.1.6:5000';
 //   // static const String baseUrl = 'http://192.168.1.6:5000/api/v1';
 
-//   static const String socketUrl = 'http://10.10.5.85:5000';
-//   static const String baseUrl = 'http://10.10.5.85:5000/api/v1';
+//   static const String socketUrl = 'http://10.10.5.71:5000';
+//   static const String baseUrl = 'http://10.10.5.71:5000/api/v1';
 // }
 
 class _LiveHostUrls {
@@ -354,6 +362,13 @@ class _Ticket {
   }
 
   static String getTicketById(String ticketId) => '$_ticketRoute/$ticketId';
+}
+
+// ---------------------- PLAN -----------------------------
+class _Plan {
+  static const String _planRoute = '${ApiEndpoints.baseUrl}/plans';
+  static const String storeSubscriptionProducts = '$_planRoute/store/products';
+  static const String confirmStoreSubscription = '$_planRoute/store/confirm';
 }
 
 // ---------------------- RIDE -----------------------------

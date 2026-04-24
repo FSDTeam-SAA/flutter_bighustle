@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart' as dio;
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/billing_client_wrappers.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 
+import '../../../core/constants/api_endpoints.dart';
 import '../../../core/helpers/subscription_access.dart';
 import '../../../core/services/app_pigeon/app_pigeon.dart';
 import '../../profile/model/profile_data.dart';
@@ -25,11 +27,40 @@ class SubscriptionService {
     monthlyProductId,
     yearlyProductId,
   };
+  static const Map<String, _FallbackSubscriptionPlan> _fallbackPlansByProductId =
+      <String, _FallbackSubscriptionPlan>{
+        monthlyProductId: _FallbackSubscriptionPlan(
+          name: 'Drive Status Premium Monthly',
+          price: 9.99,
+          currency: 'USD',
+          interval: 'month',
+          features: <String>[
+            'Unlimited driver status access',
+            'Subscription-only ticket tools',
+            'License tracking and alerts',
+            'Coverage for individuals and families',
+          ],
+        ),
+        yearlyProductId: _FallbackSubscriptionPlan(
+          name: 'Drive Status Premium Yearly',
+          price: 89.99,
+          currency: 'USD',
+          interval: 'year',
+          features: <String>[
+            'Unlimited driver status access',
+            'Subscription-only ticket tools',
+            'License tracking and alerts',
+            'Best long-term value for families',
+          ],
+        ),
+      };
 
   final InAppPurchase _inAppPurchase;
   final StreamController<SubscriptionPurchaseEvent> _purchaseEventsController =
       StreamController<SubscriptionPurchaseEvent>.broadcast();
   final Map<String, ProductDetails> _productsById = <String, ProductDetails>{};
+  final Map<String, StoreSubscriptionPlanInfo> _backendPlansByProductId =
+      <String, StoreSubscriptionPlanInfo>{};
   final Map<String, PurchaseDetails> _activePurchasesById =
       <String, PurchaseDetails>{};
 
@@ -37,6 +68,8 @@ class SubscriptionService {
   bool _isInitialized = false;
   bool _isDisposed = false;
   bool _storeAvailable = false;
+  bool _storeProductsEndpointUnavailable = false;
+  bool _storeConfirmEndpointUnavailable = false;
   String? _lastErrorMessage;
 
   Stream<SubscriptionPurchaseEvent> get purchaseEvents =>
@@ -45,6 +78,22 @@ class SubscriptionService {
   bool get isInitialized => _isInitialized;
   bool get isStoreAvailable => _storeAvailable;
   String? get lastErrorMessage => _lastErrorMessage;
+
+  StoreSubscriptionPlanInfo? backendPlanForProduct(String productId) {
+    return _backendPlansByProductId[productId] ?? _fallbackPlanForProduct(productId);
+  }
+
+  String priceLabelForProduct(String productId) {
+    final product = _productsById[productId];
+    if (product != null) {
+      return product.price;
+    }
+    final backendPlan = _backendPlansByProductId[productId];
+    if (backendPlan != null) {
+      return backendPlan.formattedPrice;
+    }
+    return _fallbackPlanForProduct(productId)?.formattedPrice ?? 'Unavailable';
+  }
 
   /// Starts listening to purchase updates and primes the cached products.
   Future<void> initialize() async {
@@ -62,6 +111,7 @@ class SubscriptionService {
     );
 
     try {
+      await _loadBackendPlans();
       _storeAvailable = await _inAppPurchase.isAvailable();
       if (!_storeAvailable) {
         _lastErrorMessage =
@@ -84,6 +134,7 @@ class SubscriptionService {
   /// Loads subscription products from the underlying store.
   Future<List<ProductDetails>> getAvailableProducts() async {
     if (_isDisposed) return const <ProductDetails>[];
+    await _loadBackendPlans();
     if (!_storeAvailable) {
       _storeAvailable = await _inAppPurchase.isAvailable();
     }
@@ -136,6 +187,54 @@ class SubscriptionService {
   Future<void> purchaseYearlySubscription() {
     return _startPurchaseFlow(yearlyProductId);
   }
+
+  /// Attempts to restore previously purchased subscriptions for the current
+  /// store account.
+  Future<void> restorePurchases() async {
+    if (_isDisposed) return;
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!_storeAvailable) {
+      final message = 'The store is currently unavailable. Please try again later.';
+      _lastErrorMessage = message;
+      throw SubscriptionException(message);
+    }
+
+    _emitEvent(
+      SubscriptionPurchaseEvent.pending(
+        message: 'Checking your store account for previous subscriptions...',
+      ),
+    );
+
+    try {
+      if (_isAndroid) {
+        await _refreshPastPurchases();
+        final restored = await isUserSubscribed();
+        if (!restored) {
+          throw const SubscriptionException(
+            'No previous subscriptions were found for this account.',
+          );
+        }
+        _emitEvent(
+          SubscriptionPurchaseEvent.success(
+            message: 'Previous subscriptions restored successfully.',
+          ),
+        );
+        return;
+      }
+
+      await _inAppPurchase.restorePurchases();
+    } catch (error) {
+      final message = 'Unable to restore purchases: ${_humanizeError(error)}';
+      _lastErrorMessage = message;
+      _emitEvent(SubscriptionPurchaseEvent.error(message: message));
+      rethrow;
+    }
+  }
+
+  bool hasStoreProduct(String productId) => _productsById.containsKey(productId);
 
   /// Returns whether the current user has an active subscription snapshot.
   ///
@@ -348,6 +447,7 @@ class SubscriptionService {
   }
 
   Future<void> _persistSubscription(PurchaseDetails purchase) async {
+    final transactionId = _resolveTransactionId(purchase);
     final startsAt =
         _readTransactionDateUtc(purchase) ?? DateTime.now().toUtc();
     final interval = _intervalForProductId(purchase.productID);
@@ -368,12 +468,133 @@ class SubscriptionService {
       subscriptionEndsAt: endsAt.toIso8601String(),
     );
 
+    final backendSnapshot = await _confirmStoreSubscriptionWithBackend(
+      purchase: purchase,
+      transactionId: transactionId,
+      startsAt: startsAt,
+    );
+
+    if (backendSnapshot != null) {
+      _applyBackendSubscriptionSnapshot(backendSnapshot);
+      return;
+    }
+
     await _persistSubscriptionToCurrentAuth(
-      subscriptionPlanId: purchase.productID,
+      subscriptionPlanId:
+          backendPlanForProduct(purchase.productID)?.planId ??
+          purchase.productID,
       planName: planName,
       subscriptionInterval: interval,
       subscriptionStartsAt: startsAt.toIso8601String(),
       subscriptionEndsAt: endsAt.toIso8601String(),
+    );
+  }
+
+  Future<void> _loadBackendPlans() async {
+    if (_storeProductsEndpointUnavailable) return;
+
+    try {
+      final appPigeon = Get.find<AppPigeon>();
+      final response = await appPigeon.get(
+        ApiEndpoints.storeSubscriptionProducts,
+      );
+      if (_responseHasMissingStoreEndpoint(response)) {
+        _storeProductsEndpointUnavailable = true;
+        return;
+      }
+      final payload = response.data;
+      final rawPlans = payload is Map<String, dynamic> ? payload['data'] : null;
+      if (rawPlans is! List) return;
+
+      _backendPlansByProductId
+        ..clear()
+        ..addEntries(
+          rawPlans.whereType<Map>().map((rawPlan) {
+            final plan = StoreSubscriptionPlanInfo.fromJson(
+              Map<String, dynamic>.from(rawPlan),
+            );
+            return MapEntry(plan.storeProductId, plan);
+          }),
+        );
+    } catch (error) {
+      if (_isMissingStoreEndpointError(error)) {
+        _storeProductsEndpointUnavailable = true;
+      }
+      // Keep the purchase flow functional even if plan metadata sync fails.
+    }
+  }
+
+  Future<Map<String, dynamic>?> _confirmStoreSubscriptionWithBackend({
+    required PurchaseDetails purchase,
+    required String transactionId,
+    required DateTime startsAt,
+  }) async {
+    if (_storeConfirmEndpointUnavailable) {
+      return null;
+    }
+
+    try {
+      final appPigeon = Get.find<AppPigeon>();
+      final response = await appPigeon.post(
+        ApiEndpoints.confirmStoreSubscription,
+        options: dio.Options(
+          validateStatus: _allowsMissingStoreEndpointStatus,
+        ),
+        data: <String, dynamic>{
+          'productId': purchase.productID,
+          'transactionId': transactionId,
+          'purchaseDate': startsAt.toIso8601String(),
+          'source': _isAndroid ? 'android' : 'ios',
+          'localVerificationData':
+              purchase.verificationData.localVerificationData,
+          'serverVerificationData':
+              purchase.verificationData.serverVerificationData,
+          'verificationSource': purchase.verificationData.source,
+        },
+      );
+      if (_responseHasMissingStoreEndpoint(response)) {
+        _storeConfirmEndpointUnavailable = true;
+        return null;
+      }
+
+      final payload = response.data;
+      if (payload is Map<String, dynamic> && payload['data'] is Map) {
+        return Map<String, dynamic>.from(payload['data'] as Map);
+      }
+    } catch (error) {
+      if (_isMissingStoreEndpointError(error)) {
+        _storeConfirmEndpointUnavailable = true;
+        return null;
+      }
+      throw SubscriptionException(
+        'Purchase completed in the store, but backend confirmation failed: ${_humanizeError(error)}',
+      );
+    }
+    return null;
+  }
+
+  void _applyBackendSubscriptionSnapshot(Map<String, dynamic> data) {
+    final subscribed = _readBool(data['subscribed']);
+    final planId = _readString(data['planId']);
+    final planName = _readString(data['planName']);
+    final subscriptionInterval = _readString(data['subscriptionInterval']);
+    final subscriptionStartsAt = _readString(data['subscriptionStartsAt']);
+    final subscriptionEndsAt = _readString(data['subscriptionEndsAt']);
+
+    ProfileData.instance.updateSubscription(
+      subscribed: subscribed,
+      planName: planName,
+      subscriptionInterval: subscriptionInterval,
+      subscriptionStartsAt: subscriptionStartsAt,
+      subscriptionEndsAt: subscriptionEndsAt,
+    );
+
+    _persistSubscriptionToCurrentAuth(
+      subscriptionPlanId: planId,
+      planName: planName,
+      subscriptionInterval: subscriptionInterval,
+      subscriptionStartsAt: subscriptionStartsAt,
+      subscriptionEndsAt: subscriptionEndsAt,
     );
   }
 
@@ -437,6 +658,18 @@ class SubscriptionService {
     return DateTime.tryParse(rawDate)?.toUtc();
   }
 
+  String _resolveTransactionId(PurchaseDetails purchase) {
+    final purchaseId = purchase.purchaseID?.trim() ?? '';
+    if (purchaseId.isNotEmpty) {
+      return purchaseId;
+    }
+    final transactionDate = purchase.transactionDate?.trim() ?? '';
+    if (transactionDate.isNotEmpty) {
+      return '${purchase.productID}_$transactionDate';
+    }
+    return '${purchase.productID}_${DateTime.now().toUtc().millisecondsSinceEpoch}';
+  }
+
   List<ProductDetails> _sortProducts(List<ProductDetails> products) {
     final sorted = List<ProductDetails>.from(products);
     sorted.sort((a, b) {
@@ -461,9 +694,68 @@ class SubscriptionService {
   }
 
   String _planNameForProductId(String productId) {
-    return productId == yearlyProductId
-        ? 'Yearly Subscription'
-        : 'Monthly Subscription';
+    return backendPlanForProduct(productId)?.name ??
+        (productId == yearlyProductId
+            ? 'Drive Status Premium Yearly'
+            : 'Drive Status Premium Monthly');
+  }
+
+  StoreSubscriptionPlanInfo? _fallbackPlanForProduct(String productId) {
+    final fallback = _fallbackPlansByProductId[productId];
+    if (fallback == null) {
+      return null;
+    }
+
+    return StoreSubscriptionPlanInfo(
+      planId: productId,
+      name: fallback.name,
+      price: fallback.price,
+      currency: fallback.currency,
+      interval: fallback.interval,
+      storeProductId: productId,
+      features: fallback.features,
+    );
+  }
+
+  bool _isMissingStoreEndpointError(Object error) {
+    if (error is! dio.DioException) {
+      return false;
+    }
+
+    final statusCode = error.response?.statusCode;
+    if (statusCode != 400 && statusCode != 404) {
+      return false;
+    }
+
+    final payload = error.response?.data;
+    if (payload is Map) {
+      final message = payload['message']?.toString().trim().toLowerCase() ?? '';
+      return message.contains('api not found');
+    }
+
+    return false;
+  }
+
+  bool _allowsMissingStoreEndpointStatus(int? statusCode) {
+    if (statusCode == null) {
+      return false;
+    }
+    return statusCode >= 200 && statusCode < 300 || statusCode == 400 || statusCode == 404;
+  }
+
+  bool _responseHasMissingStoreEndpoint(dio.Response<dynamic> response) {
+    final statusCode = response.statusCode;
+    if (statusCode != 400 && statusCode != 404) {
+      return false;
+    }
+
+    final payload = response.data;
+    if (payload is Map) {
+      final message = payload['message']?.toString().trim().toLowerCase() ?? '';
+      return message.contains('api not found');
+    }
+
+    return false;
   }
 
   String _humanizeError(Object error) {
@@ -472,6 +764,15 @@ class SubscriptionService {
     }
     return error.toString();
   }
+
+  bool _readBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final normalized = value?.toString().trim().toLowerCase() ?? '';
+    return normalized == 'true' || normalized == '1' || normalized == 'yes';
+  }
+
+  String _readString(dynamic value) => value?.toString().trim() ?? '';
 
   void _emitEvent(SubscriptionPurchaseEvent event) {
     if (_isDisposed) return;
@@ -539,6 +840,59 @@ class SubscriptionPurchaseEvent {
 }
 
 enum SubscriptionPurchaseStatus { pending, success, error, canceled }
+
+class StoreSubscriptionPlanInfo {
+  const StoreSubscriptionPlanInfo({
+    required this.planId,
+    required this.name,
+    required this.price,
+    required this.currency,
+    required this.interval,
+    required this.storeProductId,
+    required this.features,
+  });
+
+  final String planId;
+  final String name;
+  final double price;
+  final String currency;
+  final String interval;
+  final String storeProductId;
+  final List<String> features;
+
+  String get formattedPrice => '\$${price.toStringAsFixed(2)}';
+
+  factory StoreSubscriptionPlanInfo.fromJson(Map<String, dynamic> json) {
+    final featuresJson = json['features'];
+    return StoreSubscriptionPlanInfo(
+      planId: json['planId']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0,
+      currency: json['currency']?.toString() ?? 'USD',
+      interval: json['interval']?.toString() ?? 'month',
+      storeProductId: json['storeProductId']?.toString() ?? '',
+      features: featuresJson is List
+          ? featuresJson.map((item) => item.toString()).toList()
+          : const <String>[],
+    );
+  }
+}
+
+class _FallbackSubscriptionPlan {
+  const _FallbackSubscriptionPlan({
+    required this.name,
+    required this.price,
+    required this.currency,
+    required this.interval,
+    required this.features,
+  });
+
+  final String name;
+  final double price;
+  final String currency;
+  final String interval;
+  final List<String> features;
+}
 
 class SubscriptionException implements Exception {
   const SubscriptionException(this.message);
