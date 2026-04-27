@@ -1,9 +1,14 @@
+import 'dart:convert';
+
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bighustle/core/api_handler/failure.dart';
 import 'package:flutter_bighustle/core/api_handler/success.dart';
 import 'package:flutter_bighustle/core/constants/api_endpoints.dart';
 import 'package:flutter_bighustle/core/services/app_pigeon/app_pigeon.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../profile/model/profile_data.dart';
 import '../interface/auth_interface.dart';
 import '../model/forget_password_request_model.dart';
@@ -18,6 +23,8 @@ import '../model/verify_email_register_request_model.dart';
 
 final class AuthInterfaceImpl extends AuthInterface {
   final AppPigeon appPigeon;
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  static const String _appleEmailStoragePrefix = 'apple_sign_in_email_';
 
   AuthInterfaceImpl({required this.appPigeon});
 
@@ -116,6 +123,133 @@ final class AuthInterfaceImpl extends AuthInterface {
   // Stream<AuthStatus> authStream() {
   //   return appPigeon.authStream;
   // }
+
+  @override
+  Future<Either<DataCRUDFailure, Success<String>>> signInWithApple() async {
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.iOS &&
+            defaultTargetPlatform != TargetPlatform.macOS)) {
+      return Left(
+        DataCRUDFailure(
+          failure: Failure.authFailure,
+          uiMessage: 'Sign in with Apple is available only on Apple devices.',
+          fullError: 'Sign in with Apple is not supported on this platform.',
+        ),
+      );
+    }
+
+    try {
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: const <AppleIDAuthorizationScopes>[
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final appleUserId = credential.userIdentifier?.trim() ?? '';
+      if (appleUserId.isEmpty) {
+        return Left(
+          DataCRUDFailure(
+            failure: Failure.authFailure,
+            uiMessage: 'Apple sign-in did not return a user identifier.',
+            fullError: 'Missing Apple user identifier from Apple credential.',
+          ),
+        );
+      }
+
+      final email = await _resolveAppleEmail(
+        appleUserId: appleUserId,
+        credentialEmail: credential.email,
+      );
+      if (email.isEmpty) {
+        return Left(
+          DataCRUDFailure(
+            failure: Failure.authFailure,
+            uiMessage:
+                'Apple did not share an email for this sign-in. Try once more on the same device, or use your existing login.',
+            fullError: 'Missing Apple sign-in email for user $appleUserId.',
+          ),
+        );
+      }
+
+      final password = _applePasswordForUser(appleUserId);
+
+      final loginResult = await login(
+        param: LoginRequestModel(email: email, password: password),
+      );
+      DataCRUDFailure? loginFailure;
+      final loggedIn = await loginResult.fold((failure) async {
+        loginFailure = failure;
+        return false;
+      }, (_) async => true);
+      if (loggedIn) {
+        await _persistAppleIdentityOnCurrentAuth(
+          credential: credential,
+          email: email,
+        );
+        return Right(Success(data: 'apple'));
+      }
+      if (loginFailure != null &&
+          !_shouldAttemptAppleAutoRegistration(loginFailure!)) {
+        return Left(loginFailure!);
+      }
+
+      final registerResult = await register(
+        param: RegisterRequest(
+          email: email,
+          password: password,
+          confirmPassword: password,
+        ),
+      );
+
+      return await registerResult.fold((failure) async {
+        if (_looksLikeExistingAccountError(failure)) {
+          return Left(
+            DataCRUDFailure(
+              failure: Failure.authFailure,
+              uiMessage:
+                  'An account already exists for $email. Use your current email login, or add a dedicated Apple login endpoint on the backend.',
+              fullError: failure.fullError,
+            ),
+          );
+        }
+        return Left(failure);
+      }, (_) async {
+        final secondLogin = await login(
+          param: LoginRequestModel(email: email, password: password),
+        );
+        return await secondLogin.fold((failure) async {
+          return Left(failure);
+        }, (_) async {
+          await _persistAppleIdentityOnCurrentAuth(
+            credential: credential,
+            email: email,
+          );
+          return Right(Success(data: 'apple'));
+        });
+      });
+    } on SignInWithAppleAuthorizationException catch (error) {
+      final normalized = error.code.name.toLowerCase();
+      final isCanceled = normalized.contains('cancel');
+      return Left(
+        DataCRUDFailure(
+          failure: isCanceled ? Failure.authFailure : Failure.unknownFailure,
+          uiMessage: isCanceled
+              ? 'Apple sign-in was canceled.'
+              : 'Unable to complete Sign in with Apple.',
+          fullError: error.toString(),
+        ),
+      );
+    } catch (error) {
+      return Left(
+        DataCRUDFailure(
+          failure: Failure.unknownFailure,
+          uiMessage: 'Unable to complete Sign in with Apple.',
+          fullError: error.toString(),
+        ),
+      );
+    }
+  }
 
   @override
   Future<Either<DataCRUDFailure, Success<String>>> login({
@@ -277,6 +411,85 @@ final class AuthInterfaceImpl extends AuthInterface {
         await appPigeon.post(ApiEndpoints.changePassword, data: param.toJson());
         return Success(message: 'Password changed successfully', data: '');
       },
+    );
+  }
+
+  String _applePasswordForUser(String appleUserId) {
+    final encoded = base64Url.encode(utf8.encode(appleUserId));
+    final sanitized = encoded.replaceAll('=', '');
+    return 'AppleAuth!$sanitized';
+  }
+
+  Future<String> _resolveAppleEmail({
+    required String appleUserId,
+    required String? credentialEmail,
+  }) async {
+    final email = credentialEmail?.trim() ?? '';
+    final storageKey = '$_appleEmailStoragePrefix$appleUserId';
+    if (email.isNotEmpty) {
+      await _secureStorage.write(key: storageKey, value: email);
+      return email;
+    }
+
+    return (await _secureStorage.read(key: storageKey))?.trim() ?? '';
+  }
+
+  bool _looksLikeExistingAccountError(DataCRUDFailure failure) {
+    final normalized = failure.fullError.trim().toLowerCase();
+    return normalized.contains('already') ||
+        normalized.contains('exist') ||
+        normalized.contains('taken') ||
+        normalized.contains('duplicate');
+  }
+
+  bool _shouldAttemptAppleAutoRegistration(DataCRUDFailure failure) {
+    if (failure.failure == Failure.forbidden ||
+        failure.failure == Failure.socketFailure ||
+        failure.failure == Failure.timeout) {
+      return false;
+    }
+
+    final normalized = failure.fullError.trim().toLowerCase();
+    return normalized.contains('invalid') ||
+        normalized.contains('not found') ||
+        normalized.contains('not exist') ||
+        normalized.contains('incorrect') ||
+        normalized.contains('failed');
+  }
+
+  Future<void> _persistAppleIdentityOnCurrentAuth({
+    required AuthorizationCredentialAppleID credential,
+    required String email,
+  }) async {
+    final status = await appPigeon.currentAuth();
+    if (status is! Authenticated) {
+      return;
+    }
+
+    final authData = Map<String, dynamic>.from(status.auth.data);
+    authData['authProvider'] = 'apple';
+    authData['appleUserIdentifier'] = credential.userIdentifier;
+    authData['appleEmail'] = email;
+    if ((credential.givenName ?? '').trim().isNotEmpty) {
+      authData['firstName'] = credential.givenName!.trim();
+    }
+    if ((credential.familyName ?? '').trim().isNotEmpty) {
+      authData['lastName'] = credential.familyName!.trim();
+    }
+    if ((credential.identityToken ?? '').trim().isNotEmpty) {
+      authData['appleIdentityToken'] = credential.identityToken!.trim();
+    }
+    if ((credential.authorizationCode ?? '').trim().isNotEmpty) {
+      authData['appleAuthorizationCode'] =
+          credential.authorizationCode!.trim();
+    }
+
+    await appPigeon.updateCurrentAuth(
+      updateAuthParams: UpdateAuthParams(
+        accessToken: status.auth.accessToken ?? '',
+        refreshToken: status.auth.refreshToken ?? '',
+        data: authData,
+      ),
     );
   }
 }

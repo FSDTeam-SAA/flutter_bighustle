@@ -6,6 +6,8 @@ import 'package:get/get.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/billing_client_wrappers.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
+import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
+import 'package:in_app_purchase_storekit/store_kit_wrappers.dart';
 
 import '../../../core/constants/api_endpoints.dart';
 import '../../../core/helpers/subscription_access.dart';
@@ -95,6 +97,50 @@ class SubscriptionService {
     return _fallbackPlanForProduct(productId)?.formattedPrice ?? 'Unavailable';
   }
 
+  String displayTitleForProduct(String productId) {
+    return _metadataForProduct(productId).displayTitle;
+  }
+
+  String descriptionForProduct(String productId) {
+    final description = _metadataForProduct(productId).description.trim();
+    if (description.isNotEmpty) {
+      return description;
+    }
+
+    return productId == yearlyProductId
+        ? 'Best value billed once yearly through Apple.'
+        : 'Available through your App Store account.';
+  }
+
+  bool isCurrentPlanProduct(String productId) {
+    if (!SubscriptionAccess.isCurrentSubscriptionActive()) {
+      return false;
+    }
+
+    if (_activePurchasesById.containsKey(productId)) {
+      return true;
+    }
+
+    final normalizedCurrentInterval = SubscriptionAccess.normalizeInterval(
+      ProfileData.instance.subscriptionInterval,
+    );
+    final metadata = _metadataForProduct(productId);
+    return normalizedCurrentInterval.isNotEmpty &&
+        normalizedCurrentInterval == metadata.interval;
+  }
+
+  String ctaLabelForProduct(String productId) {
+    if (isCurrentPlanProduct(productId)) {
+      return 'Current Plan';
+    }
+
+    if (SubscriptionAccess.isCurrentSubscriptionActive()) {
+      return 'Change Plan';
+    }
+
+    return 'Subscribe Now';
+  }
+
   /// Starts listening to purchase updates and primes the cached products.
   Future<void> initialize() async {
     if (_isDisposed || _isInitialized) return;
@@ -162,6 +208,8 @@ class SubscriptionService {
             (product) => MapEntry(product.id, product),
           ),
         );
+
+      printStoreProductDebugInfo(response.productDetails);
 
       if (response.notFoundIDs.isNotEmpty) {
         _lastErrorMessage =
@@ -235,6 +283,62 @@ class SubscriptionService {
   }
 
   bool hasStoreProduct(String productId) => _productsById.containsKey(productId);
+
+  /// Prints the store fields returned by Apple or Google for each loaded
+  /// subscription product. This is useful for checking exactly what metadata
+  /// the store exposes to the app at runtime.
+  void printStoreProductDebugInfo([Iterable<ProductDetails>? products]) {
+    final entries = (products ?? _productsById.values).toList();
+    if (entries.isEmpty) {
+      debugPrint('No store subscription products available to print.');
+      return;
+    }
+
+    for (final product in entries) {
+      debugPrint('---------- Store Subscription Info ----------');
+      debugPrint('Product ID: ${product.id}');
+      debugPrint('Title: ${product.title}');
+      debugPrint('Description: ${product.description}');
+      debugPrint('Price: ${product.price}');
+      debugPrint('Raw Price: ${product.rawPrice}');
+      debugPrint('Currency Code: ${product.currencyCode}');
+      debugPrint('Currency Symbol: ${product.currencySymbol}');
+
+      if (product is AppStoreProductDetails) {
+        final skProduct = product.skProduct;
+        debugPrint('Platform: Apple StoreKit');
+        debugPrint(
+          'Subscription Group Identifier: '
+          '${skProduct.subscriptionGroupIdentifier ?? 'N/A'}',
+        );
+        debugPrint(
+          'Subscription Period: '
+          '${_formatAppleSubscriptionPeriod(skProduct.subscriptionPeriod)}',
+        );
+        debugPrint(
+          'Introductory Offer: '
+          '${_formatAppleDiscount(skProduct.introductoryPrice)}',
+        );
+        debugPrint('Promotional Offers Count: ${skProduct.discounts.length}');
+        for (var index = 0; index < skProduct.discounts.length; index++) {
+          final discount = skProduct.discounts[index];
+          debugPrint(
+            'Promotional Offer ${index + 1}: '
+            '${_formatAppleDiscount(discount)}',
+          );
+        }
+        debugPrint(
+          'Storefront Country Code: ${skProduct.priceLocale.countryCode}',
+        );
+      } else if (product is AppStoreProduct2Details) {
+        debugPrint('Platform: Apple StoreKit 2');
+      } else {
+        debugPrint('Platform: ${defaultTargetPlatform.name}');
+      }
+
+      debugPrint('--------------------------------------------');
+    }
+  }
 
   /// Returns whether the current user has an active subscription snapshot.
   ///
@@ -376,16 +480,14 @@ class SubscriptionService {
 
       switch (purchaseDetails.status) {
         case PurchaseStatus.pending:
-          _emitEvent(
-            SubscriptionPurchaseEvent.pending(
-              productId: purchaseDetails.productID,
-              message: 'Your subscription purchase is pending confirmation.',
-            ),
-          );
+          // Apple's payment sheet is being shown to the user — no action needed.
+          // Do NOT call completePurchase on a pending transaction; doing so would
+          // finish the transaction before the user has confirmed payment.
           break;
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
           await _finalizeSuccessfulPurchase(purchaseDetails);
+          await _completePurchaseIfNeeded(purchaseDetails);
           break;
         case PurchaseStatus.error:
           _lastErrorMessage =
@@ -397,6 +499,7 @@ class SubscriptionService {
               message: _lastErrorMessage!,
             ),
           );
+          await _completePurchaseIfNeeded(purchaseDetails);
           break;
         case PurchaseStatus.canceled:
           _emitEvent(
@@ -405,10 +508,9 @@ class SubscriptionService {
               message: 'Purchase canceled.',
             ),
           );
+          await _completePurchaseIfNeeded(purchaseDetails);
           break;
       }
-
-      await _completePurchaseIfNeeded(purchaseDetails);
     }
   }
 
@@ -418,11 +520,12 @@ class SubscriptionService {
       // backend before granting access. This sample grants access after the
       // store reports a successful or restored transaction.
       _rememberPurchase(purchase);
-      await _persistSubscription(purchase);
+      final metadata = await _persistSubscription(purchase);
 
-      final message = purchase.status == PurchaseStatus.restored
-          ? 'Subscription restored successfully.'
-          : 'Subscription activated successfully.';
+      final action = purchase.status == PurchaseStatus.restored
+          ? 'restored'
+          : 'activated';
+      final message = '${metadata.displayTitle} subscription $action successfully.';
 
       _emitEvent(
         SubscriptionPurchaseEvent.success(
@@ -446,24 +549,24 @@ class SubscriptionService {
     _activePurchasesById[purchase.productID] = purchase;
   }
 
-  Future<void> _persistSubscription(PurchaseDetails purchase) async {
+  Future<StoreSubscriptionMetadata> _persistSubscription(
+    PurchaseDetails purchase,
+  ) async {
+    final metadata = _metadataForProduct(purchase.productID);
     final transactionId = _resolveTransactionId(purchase);
     final startsAt =
         _readTransactionDateUtc(purchase) ?? DateTime.now().toUtc();
-    final interval = _intervalForProductId(purchase.productID);
     final endsAt =
         SubscriptionAccess.estimateSubscriptionEndsAt(
           startsAtUtc: startsAt,
-          interval: interval,
+          interval: metadata.interval,
         ) ??
         startsAt;
 
-    final planName = _planNameForProductId(purchase.productID);
-
     ProfileData.instance.updateSubscription(
       subscribed: true,
-      planName: planName,
-      subscriptionInterval: interval,
+      planName: metadata.planName,
+      subscriptionInterval: metadata.interval,
       subscriptionStartsAt: startsAt.toIso8601String(),
       subscriptionEndsAt: endsAt.toIso8601String(),
     );
@@ -472,22 +575,24 @@ class SubscriptionService {
       purchase: purchase,
       transactionId: transactionId,
       startsAt: startsAt,
+      metadata: metadata,
     );
 
     if (backendSnapshot != null) {
-      _applyBackendSubscriptionSnapshot(backendSnapshot);
-      return;
+      _applyBackendSubscriptionSnapshot(backendSnapshot, metadata: metadata);
+      return metadata;
     }
 
     await _persistSubscriptionToCurrentAuth(
-      subscriptionPlanId:
-          backendPlanForProduct(purchase.productID)?.planId ??
-          purchase.productID,
-      planName: planName,
-      subscriptionInterval: interval,
+      subscriptionPlanId: metadata.planId,
+      planName: metadata.planName,
+      subscriptionInterval: metadata.interval,
       subscriptionStartsAt: startsAt.toIso8601String(),
       subscriptionEndsAt: endsAt.toIso8601String(),
+      metadata: metadata,
     );
+
+    return metadata;
   }
 
   Future<void> _loadBackendPlans() async {
@@ -528,6 +633,7 @@ class SubscriptionService {
     required PurchaseDetails purchase,
     required String transactionId,
     required DateTime startsAt,
+    required StoreSubscriptionMetadata metadata,
   }) async {
     if (_storeConfirmEndpointUnavailable) {
       return null;
@@ -535,23 +641,40 @@ class SubscriptionService {
 
     try {
       final appPigeon = Get.find<AppPigeon>();
-      final response = await appPigeon.post(
-        ApiEndpoints.confirmStoreSubscription,
-        options: dio.Options(
-          validateStatus: _allowsMissingStoreEndpointStatus,
-        ),
-        data: <String, dynamic>{
-          'productId': purchase.productID,
-          'transactionId': transactionId,
-          'purchaseDate': startsAt.toIso8601String(),
-          'source': _isAndroid ? 'android' : 'ios',
-          'localVerificationData':
-              purchase.verificationData.localVerificationData,
-          'serverVerificationData':
-              purchase.verificationData.serverVerificationData,
-          'verificationSource': purchase.verificationData.source,
-        },
-      );
+      dio.Response<dynamic> response;
+      try {
+        response = await appPigeon.post(
+          ApiEndpoints.confirmStoreSubscription,
+          options: dio.Options(
+            validateStatus: _allowsMissingStoreEndpointStatus,
+          ),
+          data: _buildStoreConfirmationPayload(
+            purchase: purchase,
+            transactionId: transactionId,
+            startsAt: startsAt,
+            metadata: metadata,
+            includeMetadata: true,
+          ),
+        );
+      } catch (error) {
+        if (!_shouldRetryStoreConfirmationWithoutMetadata(error)) {
+          rethrow;
+        }
+
+        response = await appPigeon.post(
+          ApiEndpoints.confirmStoreSubscription,
+          options: dio.Options(
+            validateStatus: _allowsMissingStoreEndpointStatus,
+          ),
+          data: _buildStoreConfirmationPayload(
+            purchase: purchase,
+            transactionId: transactionId,
+            startsAt: startsAt,
+            metadata: metadata,
+            includeMetadata: false,
+          ),
+        );
+      }
       if (_responseHasMissingStoreEndpoint(response)) {
         _storeConfirmEndpointUnavailable = true;
         return null;
@@ -573,7 +696,50 @@ class SubscriptionService {
     return null;
   }
 
-  void _applyBackendSubscriptionSnapshot(Map<String, dynamic> data) {
+  Map<String, dynamic> _buildStoreConfirmationPayload({
+    required PurchaseDetails purchase,
+    required String transactionId,
+    required DateTime startsAt,
+    required StoreSubscriptionMetadata metadata,
+    required bool includeMetadata,
+  }) {
+    final payload = <String, dynamic>{
+      'productId': purchase.productID,
+      'transactionId': transactionId,
+      'purchaseDate': startsAt.toIso8601String(),
+      'source': _isAndroid ? 'android' : 'ios',
+      'localVerificationData': purchase.verificationData.localVerificationData,
+      'serverVerificationData':
+          purchase.verificationData.serverVerificationData,
+      'verificationSource': purchase.verificationData.source,
+    };
+
+    if (!includeMetadata) {
+      return payload;
+    }
+
+    payload.addAll(<String, dynamic>{
+      'planId': metadata.planId,
+      'planName': metadata.planName,
+      'productTitle': metadata.displayTitle,
+      'productDescription': metadata.description,
+      'formattedPrice': metadata.priceLabel,
+      'price': metadata.rawPrice,
+      'currencyCode': metadata.currencyCode,
+      'currencySymbol': metadata.currencySymbol,
+      'subscriptionInterval': metadata.interval,
+      'subscriptionGroupIdentifier': metadata.subscriptionGroupIdentifier,
+      'storefrontCountryCode': metadata.storefrontCountryCode,
+      'storeProduct': metadata.toJson(),
+    });
+
+    return payload;
+  }
+
+  void _applyBackendSubscriptionSnapshot(
+    Map<String, dynamic> data, {
+    StoreSubscriptionMetadata? metadata,
+  }) {
     final subscribed = _readBool(data['subscribed']);
     final planId = _readString(data['planId']);
     final planName = _readString(data['planName']);
@@ -595,6 +761,7 @@ class SubscriptionService {
       subscriptionInterval: subscriptionInterval,
       subscriptionStartsAt: subscriptionStartsAt,
       subscriptionEndsAt: subscriptionEndsAt,
+      metadata: metadata,
     );
   }
 
@@ -604,6 +771,7 @@ class SubscriptionService {
     required String subscriptionInterval,
     required String subscriptionStartsAt,
     required String subscriptionEndsAt,
+    StoreSubscriptionMetadata? metadata,
   }) async {
     try {
       final appPigeon = Get.find<AppPigeon>();
@@ -622,6 +790,19 @@ class SubscriptionService {
       authData['subscriptionInterval'] = subscriptionInterval;
       authData['subscriptionStartsAt'] = subscriptionStartsAt;
       authData['subscriptionEndsAt'] = subscriptionEndsAt;
+      if (metadata != null) {
+        authData['storeProduct'] = metadata.toJson();
+        authData['storeProductId'] = metadata.productId;
+        authData['storeProductTitle'] = metadata.displayTitle;
+        authData['storeProductDescription'] = metadata.description;
+        authData['storeFormattedPrice'] = metadata.priceLabel;
+        authData['storeRawPrice'] = metadata.rawPrice;
+        authData['storeCurrencyCode'] = metadata.currencyCode;
+        authData['storeCurrencySymbol'] = metadata.currencySymbol;
+        authData['storeSubscriptionGroupIdentifier'] =
+            metadata.subscriptionGroupIdentifier;
+        authData['storefrontCountryCode'] = metadata.storefrontCountryCode;
+      }
 
       await appPigeon.updateCurrentAuth(
         updateAuthParams: UpdateAuthParams(
@@ -700,6 +881,88 @@ class SubscriptionService {
             : 'Drive Status Premium Monthly');
   }
 
+  StoreSubscriptionMetadata _metadataForProduct(String productId) {
+    final product = _productsById[productId];
+    final backendPlan = backendPlanForProduct(productId);
+    final interval = _resolveIntervalForProduct(
+      productId: productId,
+      product: product,
+      backendPlan: backendPlan,
+    );
+    final fallbackDisplayTitle = interval == 'year' ? 'Yearly' : 'Monthly';
+    final rawTitle = product?.title.trim() ?? '';
+    final displayTitle =
+        rawTitle.isNotEmpty &&
+            !_looksLikeRawProductIdentifier(rawTitle, productId)
+        ? rawTitle
+        : fallbackDisplayTitle;
+
+    return StoreSubscriptionMetadata(
+      planId: backendPlan?.planId.isNotEmpty == true
+          ? backendPlan!.planId
+          : productId,
+      productId: productId,
+      planName: _planNameForProductId(productId),
+      displayTitle: displayTitle,
+      description: product?.description.trim() ?? '',
+      priceLabel: product?.price ?? backendPlan?.formattedPrice ?? 'Unavailable',
+      rawPrice: product?.rawPrice ?? backendPlan?.price ?? 0,
+      currencyCode: product?.currencyCode ?? backendPlan?.currency ?? 'USD',
+      currencySymbol: product?.currencySymbol ?? '',
+      interval: interval,
+      subscriptionGroupIdentifier: _subscriptionGroupIdentifierForProduct(
+        product,
+      ),
+      storefrontCountryCode: _storefrontCountryCodeForProduct(product),
+    );
+  }
+
+  String _resolveIntervalForProduct({
+    required String productId,
+    required ProductDetails? product,
+    required StoreSubscriptionPlanInfo? backendPlan,
+  }) {
+    if (product is AppStoreProductDetails) {
+      final period = product.skProduct.subscriptionPeriod;
+      final unit = period?.unit;
+      if (unit == SKSubscriptionPeriodUnit.year) {
+        return 'year';
+      }
+      if (unit == SKSubscriptionPeriodUnit.month) {
+        return 'month';
+      }
+    }
+
+    final backendInterval = SubscriptionAccess.normalizeInterval(
+      backendPlan?.interval ?? '',
+    );
+    if (backendInterval == 'year' || backendInterval == 'month') {
+      return backendInterval;
+    }
+
+    return _intervalForProductId(productId);
+  }
+
+  String? _subscriptionGroupIdentifierForProduct(ProductDetails? product) {
+    if (product is AppStoreProductDetails) {
+      return product.skProduct.subscriptionGroupIdentifier?.trim();
+    }
+    return null;
+  }
+
+  String _storefrontCountryCodeForProduct(ProductDetails? product) {
+    if (product is AppStoreProductDetails) {
+      return product.skProduct.priceLocale.countryCode.trim();
+    }
+    return '';
+  }
+
+  bool _looksLikeRawProductIdentifier(String title, String productId) {
+    final normalizedTitle = title.trim().toLowerCase();
+    final normalizedProductId = productId.trim().toLowerCase();
+    return normalizedTitle == normalizedProductId || normalizedTitle.contains('_');
+  }
+
   StoreSubscriptionPlanInfo? _fallbackPlanForProduct(String productId) {
     final fallback = _fallbackPlansByProductId[productId];
     if (fallback == null) {
@@ -734,6 +997,15 @@ class SubscriptionService {
     }
 
     return false;
+  }
+
+  bool _shouldRetryStoreConfirmationWithoutMetadata(Object error) {
+    if (error is! dio.DioException) {
+      return false;
+    }
+
+    final statusCode = error.response?.statusCode;
+    return statusCode == 400 || statusCode == 422;
   }
 
   bool _allowsMissingStoreEndpointStatus(int? statusCode) {
@@ -773,6 +1045,29 @@ class SubscriptionService {
   }
 
   String _readString(dynamic value) => value?.toString().trim() ?? '';
+
+  String _formatAppleSubscriptionPeriod(
+    SKProductSubscriptionPeriodWrapper? period,
+  ) {
+    if (period == null) {
+      return 'N/A';
+    }
+    return '${period.numberOfUnits} ${period.unit.name}';
+  }
+
+  String _formatAppleDiscount(SKProductDiscountWrapper? discount) {
+    if (discount == null) {
+      return 'N/A';
+    }
+
+    return 'price=${discount.priceLocale.currencySymbol}${discount.price}, '
+        'periods=${discount.numberOfPeriods}, '
+        'paymentMode=${discount.paymentMode.name}, '
+        'subscriptionPeriod='
+        '${_formatAppleSubscriptionPeriod(discount.subscriptionPeriod)}, '
+        'identifier=${discount.identifier ?? 'N/A'}, '
+        'type=${discount.type.name}';
+  }
 
   void _emitEvent(SubscriptionPurchaseEvent event) {
     if (_isDisposed) return;
@@ -840,6 +1135,53 @@ class SubscriptionPurchaseEvent {
 }
 
 enum SubscriptionPurchaseStatus { pending, success, error, canceled }
+
+class StoreSubscriptionMetadata {
+  const StoreSubscriptionMetadata({
+    required this.planId,
+    required this.productId,
+    required this.planName,
+    required this.displayTitle,
+    required this.description,
+    required this.priceLabel,
+    required this.rawPrice,
+    required this.currencyCode,
+    required this.currencySymbol,
+    required this.interval,
+    required this.subscriptionGroupIdentifier,
+    required this.storefrontCountryCode,
+  });
+
+  final String planId;
+  final String productId;
+  final String planName;
+  final String displayTitle;
+  final String description;
+  final String priceLabel;
+  final double rawPrice;
+  final String currencyCode;
+  final String currencySymbol;
+  final String interval;
+  final String? subscriptionGroupIdentifier;
+  final String storefrontCountryCode;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'planId': planId,
+      'productId': productId,
+      'planName': planName,
+      'displayTitle': displayTitle,
+      'description': description,
+      'priceLabel': priceLabel,
+      'rawPrice': rawPrice,
+      'currencyCode': currencyCode,
+      'currencySymbol': currencySymbol,
+      'interval': interval,
+      'subscriptionGroupIdentifier': subscriptionGroupIdentifier,
+      'storefrontCountryCode': storefrontCountryCode,
+    };
+  }
+}
 
 class StoreSubscriptionPlanInfo {
   const StoreSubscriptionPlanInfo({

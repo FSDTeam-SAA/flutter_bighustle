@@ -193,13 +193,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         : 'per month';
   }
 
-  String _ctaLabel() {
-    if (_isSubscribed) return 'Subscribed';
-    return 'Subscribe Now';
-  }
-
   bool _productIsReady(String productId) {
     return _subscriptionService.hasStoreProduct(productId);
+  }
+
+  bool _isCurrentPlan(String productId) {
+    return _subscriptionService.isCurrentPlanProduct(productId);
   }
 
   String? _storeStatusMessage() {
@@ -308,7 +307,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   builder: (context, constraints) {
                     final cards = <Widget>[
                       _SubscriptionPlanCard(
-                        title: 'Monthly',
+                        title: _subscriptionService.displayTitleForProduct(
+                          SubscriptionService.monthlyProductId,
+                        ),
                         priceLabel: _subscriptionService.priceLabelForProduct(
                           SubscriptionService.monthlyProductId,
                         ),
@@ -318,17 +319,26 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         features:
                             _planFeatures[SubscriptionService
                                 .monthlyProductId]!,
-                        availabilityMessage: _productIsReady(
+                        availabilityMessage:
+                            _productIsReady(SubscriptionService.monthlyProductId)
+                            ? _subscriptionService.descriptionForProduct(
+                                SubscriptionService.monthlyProductId,
+                              )
+                            : 'Waiting for App Store product details.',
+                        onPressed: _isCurrentPlan(
                           SubscriptionService.monthlyProductId,
                         )
-                            ? 'Available through your App Store account.'
-                            : 'Waiting for App Store product details.',
-                        onPressed: _isSubscribed ? null : _purchaseMonthly,
+                            ? null
+                            : _purchaseMonthly,
                         isLoading: _isPurchasingMonthly,
-                        buttonLabel: _ctaLabel(),
+                        buttonLabel: _subscriptionService.ctaLabelForProduct(
+                          SubscriptionService.monthlyProductId,
+                        ),
                       ),
                       _SubscriptionPlanCard(
-                        title: 'Yearly',
+                        title: _subscriptionService.displayTitleForProduct(
+                          SubscriptionService.yearlyProductId,
+                        ),
                         priceLabel: _subscriptionService.priceLabelForProduct(
                           SubscriptionService.yearlyProductId,
                         ),
@@ -337,14 +347,21 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         ),
                         features:
                             _planFeatures[SubscriptionService.yearlyProductId]!,
-                        availabilityMessage: _productIsReady(
+                        availabilityMessage:
+                            _productIsReady(SubscriptionService.yearlyProductId)
+                            ? _subscriptionService.descriptionForProduct(
+                                SubscriptionService.yearlyProductId,
+                              )
+                            : 'Waiting for App Store product details.',
+                        onPressed: _isCurrentPlan(
                           SubscriptionService.yearlyProductId,
                         )
-                            ? 'Best value billed once yearly through Apple.'
-                            : 'Waiting for App Store product details.',
-                        onPressed: _isSubscribed ? null : _purchaseYearly,
+                            ? null
+                            : _purchaseYearly,
                         isLoading: _isPurchasingYearly,
-                        buttonLabel: _ctaLabel(),
+                        buttonLabel: _subscriptionService.ctaLabelForProduct(
+                          SubscriptionService.yearlyProductId,
+                        ),
                         badgeText: 'Most Popular',
                         accentColor: _yearlyAccent,
                       ),

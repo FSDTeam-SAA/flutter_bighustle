@@ -7,7 +7,7 @@ version: 1.0.1+2
 
 
 
-
+#saafsd.app@gmail.com
 
 
 
@@ -38,6 +38,7 @@ dependencies:
   in_app_purchase_android: ^0.4.0
   # iOS/macOS platform bindings for StoreKit purchase flows.
   in_app_purchase_storekit: ^0.3.10
+  sign_in_with_apple: ^7.0.1
 
 dev_dependencies:
   flutter_test:

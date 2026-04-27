@@ -294,11 +294,16 @@ class SubscribePaymentController extends ChangeNotifier {
 
       switch (purchaseDetails.status) {
         case PurchaseStatus.pending:
+          // Apple's payment sheet is being shown — do not complete the
+          // transaction here; it hasn't been confirmed by the user yet.
           _setSubmitting(true);
           break;
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
           await _deliverPurchase(purchaseDetails);
+          if (purchaseDetails.pendingCompletePurchase) {
+            await _inAppPurchase.completePurchase(purchaseDetails);
+          }
           break;
         case PurchaseStatus.error:
           _setSubmitting(false);
@@ -307,15 +312,17 @@ class SubscribePaymentController extends ChangeNotifier {
                 purchaseDetails.error?.message ??
                 'Unable to complete the App Store purchase.',
           );
+          if (purchaseDetails.pendingCompletePurchase) {
+            await _inAppPurchase.completePurchase(purchaseDetails);
+          }
           break;
         case PurchaseStatus.canceled:
           _setSubmitting(false);
           _snackbarNotifier?.notify(message: 'Purchase canceled.');
+          if (purchaseDetails.pendingCompletePurchase) {
+            await _inAppPurchase.completePurchase(purchaseDetails);
+          }
           break;
-      }
-
-      if (purchaseDetails.pendingCompletePurchase) {
-        await _inAppPurchase.completePurchase(purchaseDetails);
       }
     }
   }
