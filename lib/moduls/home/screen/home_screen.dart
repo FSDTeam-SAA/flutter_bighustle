@@ -23,6 +23,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   HomeController? _controller;
   SnackbarNotifier? _snackbarNotifier;
+  final ProfileData _profileData = ProfileData.instance;
   bool _initialized = false;
 
   void _onControllerUpdate() {
@@ -37,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _controller!.removeListener(_onControllerUpdate);
       _controller!.dispose();
     }
+    _profileData.removeListener(_onControllerUpdate);
     super.dispose();
   }
 
@@ -55,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _snackbarNotifier = SnackbarNotifier(context: context);
     _controller = HomeController(snackbarNotifier: _snackbarNotifier!);
     _controller!.addListener(_onControllerUpdate);
+    _profileData.addListener(_onControllerUpdate);
     _controller!.loadHomeData();
 
     if (!ProfileData.instance.hasLoaded &&
@@ -63,9 +66,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _displayName(String? name) {
-    final trimmed = name?.trim() ?? '';
-    return trimmed.isNotEmpty ? trimmed : 'Driver';
+  String _displayName({String? profileName, String? fallbackName}) {
+    final fromProfile = profileName?.trim() ?? '';
+    if (fromProfile.isNotEmpty &&
+        fromProfile.toLowerCase() != 'profile name' &&
+        fromProfile.toLowerCase() != 'n/a') {
+      return fromProfile;
+    }
+
+    final fallback = fallbackName?.trim() ?? '';
+    return fallback.isNotEmpty ? fallback : 'Driver';
   }
 
   String _formatStatus(String? status) {
@@ -220,12 +230,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final hasLoaded = controller?.hasLoaded ?? false;
     final licenseState = homeData.licenseState;
     final licenseStatusStyle = _licenseStatusStyle(licenseState?.licenseStatus);
-    final displayName = _displayName(licenseState?.fullName);
+    final displayName = _displayName(
+      profileName: _profileData.name,
+      fallbackName: licenseState?.fullName,
+    );
+
     final licenseStatus = _formatStatus(licenseState?.licenseStatus);
     final licenseAlerts = _licenseAlertsCount(homeData.recentActivity);
     final ticketAlerts = homeData.ticketAlerts;
-    homeData.recentActivity.where((activity) => !activity.isRead).length;
-    final profileData = ProfileData.instance;
+    final profileData = _profileData;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F2),
@@ -444,19 +457,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      // Navigator.pushNamed(context, AppRoutes.teenDrivers);
-                    },
-                    child: Text(
-                      'See more',
-                      style: TextStyle(
-                        fontSize: (size.width * 0.042).clamp(12.0, 16.0),
-                        color: const Color(0xFF3F76F6),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+                  // TextButton(
+                  //   onPressed: () {
+                  //     // Navigator.pushNamed(context, AppRoutes.teenDrivers);
+                  //   },
+                  //   child: Text(
+                  //     'See more',
+                  //     style: TextStyle(
+                  //       fontSize: (size.width * 0.042).clamp(12.0, 16.0),
+                  //       color: const Color(0xFF3F76F6),
+                  //       fontWeight: FontWeight.w600,
+                  //     ),
+                  //   ),
+                  // ),
                 ],
               ),
               SizedBox(height: size.height * 0.02),

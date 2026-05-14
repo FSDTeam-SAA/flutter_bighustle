@@ -50,6 +50,7 @@ class LicenseResponseModel {
       return '';
     }
 
+
     return LicenseResponseModel(
       id: json['_id']?.toString() ?? '',
       userId: json['userId']?.toString() ?? '',
