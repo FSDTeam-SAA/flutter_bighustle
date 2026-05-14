@@ -1,12 +1,15 @@
-import 'dart:io';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../../../core/helpers/subscription_access.dart';
 import '../../../../core/notifiers/snackbar_notifier.dart';
 import '../../../../core/services/app_pigeon/app_pigeon.dart';
 import '../../interface/license_interface.dart';
 import '../../model/license_create_request_model.dart';
+import '../../../profile/interface/profile_interface.dart';
+import '../../../profile/model/profile_data.dart';
 import '../controller/license_info_controller.dart';
 import '../widget/license_edit_field.dart';
 import '../widget/license_status_card.dart';
@@ -19,17 +22,15 @@ class EditLicenseInfoScreen extends StatefulWidget {
 }
 
 class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
-  late final TextEditingController _nameController;
+  late final TextEditingController _firstNameController;
+  late final TextEditingController _lastNameController;
   late final TextEditingController _licenseNoController;
   late final TextEditingController _stateController;
   late final TextEditingController _dobController;
   late final TextEditingController _expireController;
   late final SnackbarNotifier _snackbarNotifier;
-  final ImagePicker _picker = ImagePicker();
   bool _isLoading = false;
   bool _isInitialized = false;
-  String? _selectedUserPhotoPath;
-  String? _selectedLicensePhotoPath;
   DateTime? _selectedDateOfBirth;
   DateTime? _selectedExpireDate;
 
@@ -136,9 +137,9 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
   void initState() {
     super.initState();
     final info = LicenseInfoController.notifier.value;
-    _nameController = TextEditingController(
-      text: info.name == 'N/A' ? '' : info.name,
-    );
+    final nameParts = _splitName(info.name);
+    _firstNameController = TextEditingController(text: nameParts.$1);
+    _lastNameController = TextEditingController(text: nameParts.$2);
     _licenseNoController = TextEditingController(text: info.licenseNo);
     _stateController = TextEditingController(text: info.state);
 
@@ -158,45 +159,83 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
     );
   }
 
-  Future<void> _pickUserPhoto() async {
-    final canProceed = await _ensureSubscribed('License photo upload');
-    if (!canProceed || !mounted) return;
-
-    try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-      if (pickedFile != null) {
-        setState(() {
-          _selectedUserPhotoPath = pickedFile.path;
-        });
-      }
-    } catch (e) {
-      _snackbarNotifier.notifyError(
-        message: 'Failed to pick image: ${e.toString()}',
-      );
+  (String, String) _splitName(String name) {
+    final normalized = name == 'N/A' ? '' : name.trim();
+    if (normalized.isEmpty) {
+      return ('', '');
     }
+
+    final parts = normalized.split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      return (parts.first, '');
+    }
+
+    return (parts.first, parts.sublist(1).join(' '));
   }
 
-  Future<void> _pickLicensePhoto() async {
-    final canProceed = await _ensureSubscribed('License photo upload');
-    if (!canProceed || !mounted) return;
+  bool _isValidStoredEmail(String value) {
+    final trimmed = value.trim();
+    return trimmed.isNotEmpty &&
+        trimmed != 'N/A' &&
+        trimmed.contains('@') &&
+        trimmed.contains('.');
+  }
+
+  String _readEmailFromMap(Map<dynamic, dynamic> source) {
+    for (final key in ['email', 'userEmail']) {
+      final value = source[key]?.toString().trim() ?? '';
+      if (_isValidStoredEmail(value)) {
+        return value;
+      }
+    }
+
+    for (final key in ['user', 'data', 'profile']) {
+      final nested = source[key];
+      if (nested is Map) {
+        final value = _readEmailFromMap(nested);
+        if (_isValidStoredEmail(value)) {
+          return value;
+        }
+      }
+    }
+
+    return '';
+  }
+
+  Future<String> _getUserEmail() async {
+    final profileEmail = ProfileData.instance.email.trim();
+    if (_isValidStoredEmail(profileEmail)) {
+      return profileEmail;
+    }
 
     try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-      if (pickedFile != null) {
-        setState(() {
-          _selectedLicensePhotoPath = pickedFile.path;
-        });
+      final authStatus = await Get.find<AppPigeon>().currentAuth();
+      if (authStatus is Authenticated) {
+        final authEmail = _readEmailFromMap(authStatus.auth.data);
+        if (_isValidStoredEmail(authEmail)) {
+          return authEmail;
+        }
       }
-    } catch (e) {
-      _snackbarNotifier.notifyError(
-        message: 'Failed to pick image: ${e.toString()}',
-      );
+    } catch (_) {
+      // Fall through to the profile API below.
+    }
+
+    if (!Get.isRegistered<ProfileInterface>()) {
+      return '';
+    }
+
+    try {
+      final result = await Get.find<ProfileInterface>().getProfile();
+      return result.fold((_) => '', (success) {
+        final profile = success.data;
+        if (profile == null) {
+          return '';
+        }
+        ProfileData.instance.updateFromProfile(profile);
+        return _isValidStoredEmail(profile.email) ? profile.email.trim() : '';
+      });
+    } catch (_) {
+      return '';
     }
   }
 
@@ -270,7 +309,8 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _licenseNoController.dispose();
     _stateController.dispose();
     _dobController.dispose();
@@ -278,36 +318,21 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
     super.dispose();
   }
 
-  Future<String?> _getUserId() async {
-    try {
-      final appPigeon = Get.find<AppPigeon>();
-      final authStatus = await appPigeon.currentAuth();
-      if (authStatus is Authenticated) {
-        final auth = authStatus.auth;
-        // Try to get userId from data
-        final userId =
-            auth.data['_id'] ??
-            auth.data['userId'] ??
-            auth.data['user']?['_id'] ??
-            auth.data['user']?['id'];
-        if (userId != null) {
-          return userId.toString();
-        }
-      }
-    } catch (e) {
-      // Silently fail
-    }
-    return null;
-  }
-
-  Future<void> _saveAndClose() async {
+  Future<void> _proceed() async {
     if (_isLoading) return;
-    final canProceed = await _ensureSubscribed('License information update');
+    final canProceed = await _ensureSubscribed(
+      'License verification submission',
+    );
     if (!canProceed || !mounted) return;
 
-    // Validate required fields
-    if (_nameController.text.trim().isEmpty) {
-      _snackbarNotifier.notifyError(message: 'Name is required');
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
+    if (firstName.isEmpty) {
+      _snackbarNotifier.notifyError(message: 'First name is required');
+      return;
+    }
+    if (lastName.isEmpty) {
+      _snackbarNotifier.notifyError(message: 'Last name is required');
       return;
     }
     if (_licenseNoController.text.trim().isEmpty) {
@@ -319,74 +344,82 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
       return;
     }
 
-    // Get user ID
-    final userId = await _getUserId();
-    if (userId == null || userId.isEmpty) {
-      _snackbarNotifier.notifyError(
-        message: 'Unable to get user information. Please login again.',
-      );
-      return;
-    }
-
     setState(() {
       _isLoading = true;
     });
 
     try {
       final info = LicenseInfoController.notifier.value;
+      final email = await _getUserEmail();
+      if (!_isValidStoredEmail(email)) {
+        _snackbarNotifier.notifyError(
+          message: 'Email is required. Please update your profile email.',
+        );
+        return;
+      }
 
-      // Use selected dates or fall back to existing
-      String dateOfBirthISO =
+      final dateOfBirthISO =
           _selectedDateOfBirth?.toIso8601String() ?? info.rawDateOfBirth;
-      String expireDateISO =
+      final expireDateISO =
           _selectedExpireDate?.toIso8601String() ?? info.rawExpireDate;
+      final fullName = '$firstName $lastName';
 
-      // Use selected images if available, otherwise keep existing
-      final userPhotoPath = _selectedUserPhotoPath ?? info.userPhoto;
-      final licensePhotoPath = _selectedLicensePhotoPath ?? info.licensePhoto;
-
-      // Create update request model
-      final updateRequest = LicenseCreateRequestModel(
-        fullName: _nameController.text.trim(),
+      final createRequest = LicenseCreateRequestModel(
+        fullName: fullName,
+        firstName: firstName,
+        lastName: lastName,
+        email: email,
         licenseNumber: _licenseNoController.text.trim(),
         state: _stateController.text.trim(),
         dateOfBirth: dateOfBirthISO,
         expiryDate: expireDateISO,
         licenseClass: info.licenseClass,
-        userPhoto: userPhotoPath,
-        licensePhoto: licensePhotoPath,
+        userPhoto: '',
+        licensePhoto: '',
       );
 
       final licenseInterface = Get.find<LicenseInterface>();
-      final result = await licenseInterface.updateLicense(
-        userId: userId,
-        param: updateRequest,
-      );
+      final result = await licenseInterface.createLicense(param: createRequest);
 
-      result.fold(
+      await result.fold(
         (failure) {
           _snackbarNotifier.notifyError(
             message: failure.uiMessage.isNotEmpty
                 ? failure.uiMessage
-                : 'Failed to update license information',
+                : 'Failed to submit license information',
           );
         },
-        (success) {
-          _snackbarNotifier.notifySuccess(
-            message: success.message.isNotEmpty
-                ? success.message
-                : 'License updated successfully',
+        (success) async {
+          final invitationUrl = success.data ?? '';
+          final invitationUri = Uri.tryParse(invitationUrl);
+          if (invitationUri == null ||
+              !(invitationUri.scheme == 'http' ||
+                  invitationUri.scheme == 'https')) {
+            _snackbarNotifier.notifyError(
+              message: 'Invitation link was not found. Please try again.',
+            );
+            return;
+          }
+
+          final completed = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) =>
+                  LicenseInvitationWebViewScreen(invitationUrl: invitationUrl),
+            ),
           );
-          // Reload license data
-          LicenseInfoController.loadLicenseData(
+
+          if (!mounted) return;
+          await LicenseInfoController.loadLicenseData(
             snackbarNotifier: _snackbarNotifier,
           );
-          Navigator.of(context).pop();
+          if (completed == true) {
+            await _showThanksDialog();
+          }
         },
       );
     } catch (e) {
       _snackbarNotifier.notifyError(
-        message: 'An error occurred while updating license information',
+        message: 'An error occurred while submitting license information',
       );
     } finally {
       if (mounted) {
@@ -395,6 +428,24 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
         });
       }
     }
+  }
+
+  Future<void> _showThanksDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Thanks for submitting'),
+          content: const Text('Your license information has been submitted.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildDateField({
@@ -451,134 +502,6 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
     );
   }
 
-  Widget _buildPhotoSection({
-    required String title,
-    String? imagePath,
-    required String existingImageUrl,
-    required VoidCallback onPickImage,
-  }) {
-    final bool hasValidImage =
-        imagePath != null ||
-        (existingImageUrl.isNotEmpty &&
-            (existingImageUrl.startsWith('http://') ||
-                existingImageUrl.startsWith('https://')));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            SizedBox(
-              height: 30,
-              child: OutlinedButton(
-                onPressed: onPickImage,
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEDEDED),
-                  foregroundColor: Colors.black87,
-                  side: const BorderSide(color: Color(0xFF2F2F2F)),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  minimumSize: const Size(0, 30),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text(
-                  'Upload photo +',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Container(
-          height: 140,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x14000000),
-                blurRadius: 8,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: imagePath != null
-                ? Image.file(
-                    File(imagePath),
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.grey[200],
-                        child: const Center(
-                          child: Icon(
-                            Icons.image,
-                            size: 50,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      );
-                    },
-                  )
-                : hasValidImage
-                ? Image.network(
-                    existingImageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.grey[200],
-                        child: const Center(
-                          child: Icon(
-                            Icons.image,
-                            size: 50,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      );
-                    },
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        color: Colors.grey[200],
-                        child: const Center(child: CircularProgressIndicator()),
-                      );
-                    },
-                  )
-                : Container(
-                    color: Colors.grey[200],
-                    child: const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.image_outlined,
-                            size: 50,
-                            color: Colors.grey,
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'No image selected',
-                            style: TextStyle(color: Colors.grey, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final info = LicenseInfoController.notifier.value;
@@ -602,22 +525,6 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
             expiryDate: info.expiryShort,
           ),
           const SizedBox(height: 10),
-          // User Photo Section
-          _buildPhotoSection(
-            title: 'User Photo',
-            imagePath: _selectedUserPhotoPath,
-            existingImageUrl: info.userPhoto,
-            onPickImage: _pickUserPhoto,
-          ),
-          const SizedBox(height: 12),
-          // License Photo Section
-          _buildPhotoSection(
-            title: 'License Photo',
-            imagePath: _selectedLicensePhotoPath,
-            existingImageUrl: info.licensePhoto,
-            onPickImage: _pickLicensePhoto,
-          ),
-          const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -639,7 +546,14 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 10),
-                LicenseEditField(label: 'Name', controller: _nameController),
+                LicenseEditField(
+                  label: 'First Name',
+                  controller: _firstNameController,
+                ),
+                LicenseEditField(
+                  label: 'Last Name',
+                  controller: _lastNameController,
+                ),
                 LicenseEditField(
                   label: 'License No',
                   controller: _licenseNoController,
@@ -663,7 +577,7 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
             width: double.infinity,
             height: 46,
             child: ElevatedButton(
-              onPressed: _isLoading ? null : _saveAndClose,
+              onPressed: _isLoading ? null : _proceed,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1976F3),
                 foregroundColor: Colors.white,
@@ -682,12 +596,270 @@ class _EditLicenseInfoScreenState extends State<EditLicenseInfoScreen> {
                       ),
                     )
                   : const Text(
-                      'Done',
+                      'Proceed',
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
             ),
           ),
           const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+class LicenseInvitationWebViewScreen extends StatefulWidget {
+  const LicenseInvitationWebViewScreen({
+    super.key,
+    required this.invitationUrl,
+  });
+
+  final String invitationUrl;
+
+  @override
+  State<LicenseInvitationWebViewScreen> createState() =>
+      _LicenseInvitationWebViewScreenState();
+}
+
+class _LicenseInvitationWebViewScreenState
+    extends State<LicenseInvitationWebViewScreen> {
+  WebViewController? _controller;
+  Timer? _completionPollTimer;
+  int _progress = 0;
+  bool _completed = false;
+  bool _isInitializing = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeWebView();
+  }
+
+  @override
+  void dispose() {
+    _completionPollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initializeWebView() async {
+    final invitationUrl = widget.invitationUrl.trim();
+    final uri = Uri.tryParse(invitationUrl);
+    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
+      _setWebViewError('Invalid invitation link.');
+      return;
+    }
+
+    debugPrint('Opening Checkr invitation URL: $invitationUrl');
+
+    try {
+      final controller = WebViewController();
+      await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+      await controller.setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (progress) {
+            if (mounted) {
+              setState(() => _progress = progress);
+            }
+          },
+          onPageStarted: (url) {
+            debugPrint('Checkr WebView page started: $url');
+          },
+          onNavigationRequest: (request) {
+            if (_isCompletionUrl(request.url)) {
+              _finishCompleted();
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+          onPageFinished: (url) {
+            debugPrint('Checkr WebView page finished: $url');
+            _checkPageCompletion(url);
+          },
+          onWebResourceError: (error) {
+            debugPrint(
+              'Checkr WebView resource error: '
+              '${error.errorCode} ${error.description}',
+            );
+            if (error.isForMainFrame == true) {
+              _setWebViewError(
+                'Unable to load the Checkr form. Please try again.',
+              );
+            }
+          },
+        ),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _controller = controller;
+        _isInitializing = false;
+      });
+      await controller.loadRequest(uri);
+      _startCompletionPolling();
+    } catch (error) {
+      debugPrint('Checkr WebView initialization failed: $error');
+      _setWebViewError(
+        'Unable to open the Checkr form. Please rebuild the app.',
+      );
+    }
+  }
+
+  void _setWebViewError(String message) {
+    if (!mounted) return;
+    setState(() {
+      _errorMessage = message;
+      _isInitializing = false;
+    });
+  }
+
+  void _startCompletionPolling() {
+    _completionPollTimer?.cancel();
+    _completionPollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _checkCurrentPageCompletion();
+    });
+  }
+
+  bool _isCompletionUrl(String url) {
+    final uri = Uri.tryParse(url.toLowerCase());
+    if (uri == null) return false;
+
+    final path = uri.path;
+    final status = uri.queryParameters['status'] ?? '';
+    final result = uri.queryParameters['result'] ?? '';
+    final invitationStatus = uri.queryParameters['invitation_status'] ?? '';
+    return path.contains('/complete') ||
+        path.contains('/completed') ||
+        path.contains('/confirmation') ||
+        path.contains('/confirmed') ||
+        path.contains('/finish') ||
+        path.contains('/finished') ||
+        path.contains('/success') ||
+        path.contains('/submitted') ||
+        path.contains('/thank-you') ||
+        path.contains('/thank_you') ||
+        status == 'complete' ||
+        status == 'completed' ||
+        status == 'success' ||
+        result == 'success' ||
+        invitationStatus == 'completed';
+  }
+
+  bool _hasCompletionText(String value) {
+    final lower = value.toLowerCase();
+    return lower.contains('review your information') ||
+        lower.contains("review the information you've provided") ||
+        lower.contains('review the information you have provided') ||
+        lower.contains('please review your information') ||
+        lower.contains('thanks for submitting') ||
+        lower.contains('thank you for submitting') ||
+        lower.contains('thank you') && lower.contains('submitted') ||
+        lower.contains('thanks') && lower.contains('submitted') ||
+        lower.contains('submitted successfully') ||
+        lower.contains('successfully submitted') ||
+        lower.contains('your information has been submitted') ||
+        lower.contains('background check has been submitted') ||
+        lower.contains('submission complete') ||
+        lower.contains('invitation completed') ||
+        lower.contains("you're all set") ||
+        lower.contains('you are all set') ||
+        lower.contains('all set');
+  }
+
+  Future<void> _checkCurrentPageCompletion() async {
+    if (_completed) return;
+
+    final controller = _controller;
+    if (controller == null) return;
+
+    try {
+      final url = await controller.currentUrl();
+      if (url != null && _isCompletionUrl(url)) {
+        _finishCompleted();
+        return;
+      }
+      await _checkPageCompletion(url ?? '');
+    } catch (error) {
+      debugPrint('Checkr WebView completion polling skipped: $error');
+    }
+  }
+
+  Future<void> _checkPageCompletion(String url) async {
+    if (_completed || _isCompletionUrl(url)) {
+      _finishCompleted();
+      return;
+    }
+
+    final controller = _controller;
+    if (controller == null) return;
+
+    try {
+      final title = await controller.getTitle();
+      if (title != null && _hasCompletionText(title)) {
+        _finishCompleted();
+        return;
+      }
+
+      final bodyText = await controller.runJavaScriptReturningResult(r'''
+        (() => {
+          const bodyText = document.body ? document.body.innerText : '';
+          const documentText = document.documentElement ? document.documentElement.innerText : '';
+          return `${document.title || ''}\\n${bodyText}\\n${documentText}`;
+        })()
+        ''');
+      if (_hasCompletionText(bodyText.toString())) {
+        _finishCompleted();
+      }
+    } catch (_) {
+      // Some pages block JavaScript inspection; URL detection still handles
+      // normal completion redirects.
+    }
+  }
+
+  void _finishCompleted() {
+    if (_completed || !mounted) return;
+    _completionPollTimer?.cancel();
+    _completed = true;
+    debugPrint('Checkr WebView completed. Returning to app.');
+    Navigator.of(context).pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('License Verification'),
+        actions: [
+          TextButton(onPressed: _finishCompleted, child: const Text('Done')),
+          IconButton(
+            tooltip: 'Close',
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          if (_errorMessage != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 15, color: Colors.black87),
+                ),
+              ),
+            )
+          else if (_isInitializing || controller == null)
+            const Center(child: CircularProgressIndicator())
+          else
+            WebViewWidget(controller: controller),
+          if (_progress < 100)
+            LinearProgressIndicator(
+              value: _progress == 0 ? null : _progress / 100,
+            ),
         ],
       ),
     );

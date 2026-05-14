@@ -1,5 +1,8 @@
 class LicenseCreateRequestModel {
   final String fullName;
+  final String firstName;
+  final String lastName;
+  final String email;
   final String userPhoto;
   final String licenseNumber;
   final String state;
@@ -10,6 +13,9 @@ class LicenseCreateRequestModel {
 
   const LicenseCreateRequestModel({
     required this.fullName,
+    this.firstName = '',
+    this.lastName = '',
+    this.email = '',
     required this.userPhoto,
     required this.licenseNumber,
     required this.state,
@@ -20,19 +26,25 @@ class LicenseCreateRequestModel {
   });
 
   Map<String, dynamic> toJson() => {
-        'fullName': fullName,
-        'userPhoto': userPhoto,
-        'licenseNumber': licenseNumber,
-        'state': state,
-        'dateOfBirth': dateOfBirth,
-        'expiryDate': expiryDate,
-        'licenseClass': licenseClass,
-        'licensePhoto': licensePhoto,
-      };
+    'fullName': fullName,
+    'firstName': firstName,
+    'lastName': lastName,
+    'email': email,
+    'userPhoto': userPhoto,
+    'licenseNumber': licenseNumber,
+    'state': state,
+    'dateOfBirth': dateOfBirth,
+    'expiryDate': expiryDate,
+    'licenseClass': licenseClass,
+    'licensePhoto': licensePhoto,
+  };
 
   factory LicenseCreateRequestModel.fromJson(Map<String, dynamic> json) {
     return LicenseCreateRequestModel(
       fullName: json['fullName']?.toString() ?? '',
+      firstName: json['firstName']?.toString() ?? '',
+      lastName: json['lastName']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
       userPhoto: json['userPhoto']?.toString() ?? '',
       licenseNumber: json['licenseNumber']?.toString() ?? '',
       state: json['state']?.toString() ?? '',
@@ -45,6 +57,9 @@ class LicenseCreateRequestModel {
 
   LicenseCreateRequestModel copyWith({
     String? fullName,
+    String? firstName,
+    String? lastName,
+    String? email,
     String? userPhoto,
     String? licenseNumber,
     String? state,
@@ -55,6 +70,9 @@ class LicenseCreateRequestModel {
   }) {
     return LicenseCreateRequestModel(
       fullName: fullName ?? this.fullName,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      email: email ?? this.email,
       userPhoto: userPhoto ?? this.userPhoto,
       licenseNumber: licenseNumber ?? this.licenseNumber,
       state: state ?? this.state,
