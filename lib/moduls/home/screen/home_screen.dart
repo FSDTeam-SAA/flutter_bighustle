@@ -142,6 +142,10 @@ class _HomeScreenState extends State<HomeScreen> {
   _IndicatorStyle _licenseStatusStyle(String? status) {
     final normalized = status?.toLowerCase().trim() ?? '';
     if (normalized == 'active' ||
+        normalized == 'complete' ||
+        normalized == 'completed' ||
+        normalized == 'ok' ||
+        normalized == 'okay' ||
         normalized == 'verified' ||
         normalized == 'valid') {
       return const _IndicatorStyle(
@@ -290,10 +294,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         return CircleAvatar(
                           radius: (size.width * 0.045).clamp(14.0, 20.0),
                           backgroundColor: const Color(0xFFE0E0E0),
-                          backgroundImage: avatarProvider,
-                          child: avatarProvider == null
-                              ? const Icon(Icons.person, color: Colors.white)
-                              : null,
+                          foregroundImage: avatarProvider,
+                          onForegroundImageError: avatarProvider == null
+                              ? null
+                              : (_, __) {},
+                          child: const Icon(Icons.person, color: Colors.white),
                         );
                       },
                     ),
