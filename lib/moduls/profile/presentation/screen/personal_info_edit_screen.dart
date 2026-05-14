@@ -151,15 +151,16 @@ class _PersonalInfoEditScreenState extends State<PersonalInfoEditScreen> {
                             return CircleAvatar(
                               radius: 36,
                               backgroundColor: const Color(0xFFE1E1E1),
-                              backgroundImage:
-                                  _profileData.avatarImageProvider,
-                              child: _profileData.avatarImageProvider == null
-                                  ? const Icon(
-                                      Icons.person,
-                                      color: Colors.black45,
-                                      size: 36,
-                                    )
-                                  : null,
+                              foregroundImage: _profileData.avatarImageProvider,
+                              onForegroundImageError:
+                                  _profileData.avatarImageProvider == null
+                                  ? null
+                                  : (_, __) {},
+                              child: const Icon(
+                                Icons.person,
+                                color: Colors.black45,
+                                size: 36,
+                              ),
                             );
                           },
                         ),

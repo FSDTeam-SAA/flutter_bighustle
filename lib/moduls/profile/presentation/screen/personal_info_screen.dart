@@ -268,15 +268,16 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                               CircleAvatar(
                                 radius: 36,
                                 backgroundColor: const Color(0xFFE1E1E1),
-                                backgroundImage:
-                                    profileData.avatarImageProvider,
-                                child: profileData.avatarImageProvider == null
-                                    ? const Icon(
-                                        Icons.person,
-                                        color: Colors.black45,
-                                        size: 36,
-                                      )
-                                    : null,
+                                foregroundImage: profileData.avatarImageProvider,
+                                onForegroundImageError:
+                                    profileData.avatarImageProvider == null
+                                    ? null
+                                    : (_, __) {},
+                                child: const Icon(
+                                  Icons.person,
+                                  color: Colors.black45,
+                                  size: 36,
+                                ),
                               ),
                               const SizedBox(height: 12),
                             ],
