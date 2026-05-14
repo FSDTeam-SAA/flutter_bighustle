@@ -117,7 +117,7 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
             children: [
               SizedBox(height: size.height * 0.04),
               Center(
-                child: AuthLogo(fontSize: size.width * 0.16),
+                child: AuthLogo(),
               ),
               SizedBox(height: size.height * 0.05),
               Text(

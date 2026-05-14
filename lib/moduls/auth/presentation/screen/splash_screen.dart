@@ -53,7 +53,7 @@ class _SplashScreenState extends State<SplashScreen> {
             children: [
               SizedBox(height: size.height * 0.18),
               Center(
-                child: AuthLogo(fontSize: size.width * 0.2),
+                child: AuthLogo(),
               ),
               SizedBox(height: size.height * 0.02),
               Text(

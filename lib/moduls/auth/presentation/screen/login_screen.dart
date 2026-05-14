@@ -116,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               SizedBox(height: size.height * 0.06),
               Center(
-                child: AuthLogo(fontSize: size.width * 0.18),
+                child: AuthLogo(),
               ),
               SizedBox(height: size.height * 0.05),
               Text(

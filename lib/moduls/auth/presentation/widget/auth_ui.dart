@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bighustle/core/common/common/app_logo.dart';
 
 class AuthColors {
   static const Color background = Color(0xFFF2F2F2);
@@ -12,23 +13,19 @@ class AuthColors {
 }
 
 class AuthLogo extends StatelessWidget {
-  final double fontSize;
-  final String text;
+  final double  height;
+  final double width;
 
   const AuthLogo({
     super.key,
-    required this.fontSize,
-    this.text = 'Logo',
+      this.height=120,
+     this.width = 120,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      'assets/images/app_logo.png',
-      height: fontSize*1.5,
-      width: fontSize * 2.2,
-      fit: BoxFit.contain,
-      semanticLabel: text,
+    return AppLogo(height: height,
+    width: width,
     );
   }
 }

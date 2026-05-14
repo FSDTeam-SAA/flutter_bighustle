@@ -89,7 +89,7 @@ class _SignupScreenState extends State<SignupScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(height: size.height * 0.04),
-              Center(child: AuthLogo(fontSize: size.width * 0.18)),
+              Center(child: AuthLogo()),
               SizedBox(height: size.height * 0.04),
               Text(
                 'Get Started',
