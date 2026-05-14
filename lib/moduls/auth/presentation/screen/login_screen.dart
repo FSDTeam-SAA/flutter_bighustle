@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'package:flutter_bighustle/core/constants/app_routes.dart';
 import 'package:flutter_bighustle/core/notifiers/snackbar_notifier.dart';
@@ -18,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   late final LoginsScreenController _controller;
   bool _initialized = false;
   bool _isLoading = false;
+  bool _isAppleLoading = false;
   String? _emailError;
   String? _passwordError;
 
@@ -31,6 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final regex = RegExp(r'^[\w\.\-]+@([\w\-]+\.)+[A-Za-z]{2,}$');
     return regex.hasMatch(email);
   }
+
+  bool get _supportsAppleSignIn =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
 
   @override
   void didChangeDependencies() {
@@ -96,6 +104,20 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _passwordError = 'Entered password incorrect';
       });
+    }
+  }
+
+  Future<void> _submitAppleSignIn() async {
+    if (_isAppleLoading) return;
+
+    setState(() => _isAppleLoading = true);
+    final success = await _controller.signInWithApple();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isAppleLoading = false);
+    if (success) {
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
     }
   }
 
@@ -194,6 +216,35 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: _controller.canSubmit && !_isLoading ? _submit : null,
                 isLoading: _isLoading,
               ),
+              if (_supportsAppleSignIn) ...[
+                SizedBox(height: size.height * 0.02),
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'or',
+                        style: TextStyle(
+                          fontSize: (size.width * 0.04).clamp(12.0, 16.0),
+                          color: AuthColors.textMuted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+                SizedBox(height: size.height * 0.02),
+                SizedBox(
+                  height: (size.height * 0.075).clamp(48.0, 60.0),
+                  child: SignInWithAppleButton(
+                    onPressed: _isAppleLoading ? null : _submitAppleSignIn,
+                    style: SignInWithAppleButtonStyle.black,
+                    text: 'Sign in with Apple',
+                  ),
+                ),
+              ],
               SizedBox(height: size.height * 0.02),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,

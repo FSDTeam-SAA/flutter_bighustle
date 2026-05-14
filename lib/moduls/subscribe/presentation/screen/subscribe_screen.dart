@@ -135,14 +135,6 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
     return value.toUpperCase();
   }
 
-  bool _isLockedBySubscription({
-    required PlanModel plan,
-    required bool hasActiveSubscription,
-  }) {
-    if (!hasActiveSubscription) return false;
-    return plan.price > 0;
-  }
-
   String _yearlyEquivalentText(PlanModel plan) {
     if (_normalizeInterval(plan.interval) != 'year' || plan.price <= 0) {
       return '';
@@ -174,19 +166,6 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   }
 
   void _selectPlan(PlanModel plan) {
-    final hasActiveSubscription =
-        SubscriptionAccess.isCurrentSubscriptionActive();
-    final isLocked = _isLockedBySubscription(
-      plan: plan,
-      hasActiveSubscription: hasActiveSubscription,
-    );
-    if (isLocked) {
-      final blockMessage = SubscriptionAccess.activeSubscriptionBlockMessage();
-      if (blockMessage != null) {
-        _snackbarNotifier.notify(message: blockMessage);
-      }
-      return;
-    }
     _controller.selectPlan(plan);
     final cycle = _toCycle(plan.interval);
     if (cycle != null) {
@@ -197,35 +176,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   }
 
   Future<void> _submitSubscription() async {
-    final success = await _controller.submitSubscription(
-      snackbarNotifier: _snackbarNotifier,
-    );
-    if (mounted && success) _showSuccessDialog();
-  }
-
-  void _showSuccessDialog() {
-    final plan = _controller.selectedPlan;
-    if (plan == null) return;
-    final priceText =
-        '${_currencySymbol(plan.currency)}${plan.price.toStringAsFixed(2)}';
-    final cycle = _cycleLabel(plan.interval).toLowerCase();
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Subscription Active'),
-          content: Text(
-            'You are now subscribed to ${plan.name} ($priceText / $cycle).',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Done'),
-            ),
-          ],
-        );
-      },
-    );
+    await _controller.submitSubscription(snackbarNotifier: _snackbarNotifier);
   }
 
   Widget _buildActiveSubscriptionBanner(String message) {
@@ -254,6 +205,84 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 fontWeight: FontWeight.w500,
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStoreMessageBanner(String message) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4DB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF0D39A)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.info_outline, color: Color(0xFFB45309), size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFF8A5B00),
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppleInfoCard() {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Billed Through Apple',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: _title,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Your subscription is billed to your Apple ID account. It renews automatically unless canceled at least 24 hours before the end of the current period. You can manage or cancel it from your App Store account settings.',
+            style: TextStyle(color: _muted, fontSize: 13.5, height: 1.45),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton(
+            onPressed: _controller.isSubmitting
+                ? null
+                : () => _controller.restorePurchases(
+                    snackbarNotifier: _snackbarNotifier,
+                  ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _primaryBlue,
+              side: const BorderSide(color: _primaryBlue),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
+            ),
+            child: const Text('Restore Purchases'),
           ),
         ],
       ),
@@ -345,7 +374,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
     required PlanModel plan,
     required bool isCurrent,
     required bool isSelected,
-    required bool isLockedForSubscription,
+    required bool hasActiveSubscription,
   }) {
     final isFree = plan.price == 0;
     final priceText = isFree
@@ -357,10 +386,10 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
     final features = plan.features.isNotEmpty
         ? plan.features
         : <String>[
-            'Upgrade anytime for full access',
-            'Access to selected API exams',
-            'Full-length mock exams',
-            'Timed & full simulation modes',
+            'Full access to driver status subscription features',
+            'Ticket details and subscription-only ticket tools',
+            'License upload and verification access',
+            'Premium driver alerts and account access',
           ];
 
     return AnimatedContainer(
@@ -539,18 +568,6 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     ),
                     child: const Text('Your Current Plan'),
                   )
-                : isLockedForSubscription
-                ? OutlinedButton(
-                    onPressed: null,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF98A2B3),
-                      side: const BorderSide(color: Color(0xFFD0D5DD)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
-                    child: const Text('Subscription Active'),
-                  )
                 : (isSelected
                       ? ElevatedButton(
                           onPressed: _controller.isSubmitting
@@ -575,7 +592,11 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                                     ),
                                   ),
                                 )
-                              : Text('Subscribe - $priceText'),
+                              : Text(
+                                  hasActiveSubscription
+                                      ? 'Change with Apple'
+                                      : 'Subscribe with Apple',
+                                ),
                         )
                       : OutlinedButton(
                           onPressed: () => _selectPlan(plan),
@@ -586,7 +607,11 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                               borderRadius: BorderRadius.circular(30),
                             ),
                           ),
-                          child: Text('Select $cycleLabel'),
+                          child: Text(
+                            hasActiveSubscription
+                                ? 'Choose $cycleLabel'
+                                : 'Select $cycleLabel',
+                          ),
                         )),
           ),
         ],
@@ -604,7 +629,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         centerTitle: true,
         leading: const BackButton(color: _title),
         title: const Text(
-          'Subscribe',
+          'Apple Subscription',
           style: TextStyle(color: _title, fontWeight: FontWeight.w700),
         ),
       ),
@@ -645,6 +670,9 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                       activeSubscriptionMessage != null &&
                       activeSubscriptionMessage.isNotEmpty)
                     _buildActiveSubscriptionBanner(activeSubscriptionMessage),
+                  if (_controller.storeMessage != null &&
+                      _controller.storeMessage!.isNotEmpty)
+                    _buildStoreMessageBanner(_controller.storeMessage!),
                   if (hasPlans)
                     _buildCycleSelector(
                       availableCycles: availableCycles,
@@ -685,23 +713,18 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                         plan: currentPlan,
                         isCurrent: true,
                         isSelected: false,
-                        isLockedForSubscription: false,
+                        hasActiveSubscription: hasActiveSubscription,
                       ),
                     for (final plan in plansToShow)
                       () {
-                        final isLockedForSubscription = _isLockedBySubscription(
-                          plan: plan,
-                          hasActiveSubscription: hasActiveSubscription,
-                        );
                         final card = _buildPlanCard(
                           scopedPlans: scopedPlans,
                           plan: plan,
                           isCurrent: false,
                           isSelected: plan.id == selectedPlan?.id,
-                          isLockedForSubscription: isLockedForSubscription,
+                          hasActiveSubscription: hasActiveSubscription,
                         );
-                        if (plan.id == selectedPlan?.id ||
-                            isLockedForSubscription) {
+                        if (plan.id == selectedPlan?.id) {
                           return card;
                         }
                         return GestureDetector(
@@ -709,6 +732,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                           child: card,
                         );
                       }(),
+                    _buildAppleInfoCard(),
                   ],
                 ],
               ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:get/get.dart';
-
+  
 import 'package:flutter_bighustle/core/helpers/subscription_access.dart';
 import 'package:flutter_bighustle/core/notifiers/snackbar_notifier.dart';
 import 'package:flutter_bighustle/core/services/app_pigeon/app_pigeon.dart';

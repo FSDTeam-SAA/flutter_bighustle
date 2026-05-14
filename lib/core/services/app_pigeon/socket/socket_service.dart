@@ -33,8 +33,6 @@ class SocketService {
   SocketService();
   int _attempts = 0;
 
-  /// Socket connect param
-  /// Pass this param to the `init()` method to initialize the socket
   SocketConnectParam? _param;
 
   bool get isConnected => _socket?.connected ?? false;
@@ -43,7 +41,6 @@ class SocketService {
     _attempts++;
     debugPrint("Socket init attempt: $_attempts");
     _param = socketConnectParam;
-    // Dispose previous socket, if exists
     _disposeSocket();
     _init();
   }

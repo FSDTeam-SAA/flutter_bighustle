@@ -6,6 +6,8 @@ plugins {
 }
 
 android {
+    // Google Play Billing is provided transitively by the Flutter in_app_purchase plugin.
+    // Keep billing versions aligned in pubspec.yaml instead of declaring billingclient here.
     namespace = "com.example.flutter_bighustle"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
@@ -22,6 +24,8 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.bighustle.khalidapp"
+        // Subscriptions such as monthly/yearly plans are defined in Google Play Console,
+        // while this app module only needs to package the billing-enabled build.
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

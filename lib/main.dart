@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:get/get.dart';
 import 'package:flutter_bighustle/core/constants/app_routes.dart';
 import 'package:flutter_bighustle/core/di/external_service_di.dart';
 import 'package:flutter_bighustle/core/di/internal_service_di.dart';
-import 'package:flutter_bighustle/core/constants/stripe_config.dart';
 import 'package:flutter_bighustle/moduls/auth/presentation/screen/forget_password.dart';
 import 'package:flutter_bighustle/moduls/auth/presentation/screen/login_screen.dart';
 import 'package:flutter_bighustle/moduls/auth/presentation/screen/otp_verify_screen.dart';
@@ -21,32 +20,59 @@ import 'package:flutter_bighustle/moduls/license/presentation/screen/edit_licens
 import 'package:flutter_bighustle/moduls/license/presentation/screen/license_screen.dart';
 import 'package:flutter_bighustle/moduls/license/presentation/screen/liscense_alearts_screen.dart';
 import 'package:flutter_bighustle/moduls/ticket/presentation/screen/notification_screen.dart';
-import 'package:flutter_bighustle/moduls/ticket/presentation/screen/plan_pricing_details_screen.dart';
 import 'package:flutter_bighustle/moduls/ticket/presentation/screen/ticket_details_screen.dart';
 import 'package:flutter_bighustle/moduls/ticket/presentation/screen/ticket_screen.dart';
 import 'package:flutter_bighustle/moduls/notification/presentation/screen/notification_screen.dart';
+import 'package:flutter_bighustle/moduls/subscribe/presentation/screen/subscription_screen.dart';
+import 'package:flutter_bighustle/moduls/subscribe/service/subscription_service.dart';
 import 'moduls/profile/presentation/screen/profile_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  debugPrint(
-    'Stripe publishableKey prefix: ${StripeConfig.publishableKey.substring(0, 15)}',
-  );
-  Stripe.publishableKey = StripeConfig.publishableKey;
-  Stripe.urlScheme = 'flutterstripe';
-  await Stripe.instance.applySettings();
   externalServiceDI();
   initServices();
-  runApp(const MyApp());
+
+  // Start listening to subscription updates as early as possible so delayed
+  // purchase callbacks from the stores are not missed.
+  await Get.find<SubscriptionService>().initialize();
+
+  runApp(MyApp(subscriptionService: Get.find<SubscriptionService>()));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({super.key, required this.subscriptionService});
+
+  final SubscriptionService subscriptionService;
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      widget.subscriptionService.dispose();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.subscriptionService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Bighustle',
+      title: 'Drive Status',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -144,12 +170,6 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(
               builder: (_) => const TicketNotificationScreen(),
             );
-          // case AppRoutes.planPricing:
-          //   return MaterialPageRoute(builder: (_) => const PlanPricingScreen());
-          case AppRoutes.planPricingDetails:
-            return MaterialPageRoute(
-              builder: (_) => const PlanPricingDetailsScreen(),
-            );
           case AppRoutes.community:
             return MaterialPageRoute(
               builder: (_) => const TeenDriverPostsScreen(),
@@ -159,6 +179,10 @@ class MyApp extends StatelessWidget {
           case AppRoutes.notifications:
             return MaterialPageRoute(
               builder: (_) => const NotificationScreen(),
+            );
+          case AppRoutes.subscriptions:
+            return MaterialPageRoute(
+              builder: (_) => const SubscriptionScreen(),
             );
           default:
             return MaterialPageRoute(builder: (_) => const LoginScreen());

@@ -84,4 +84,32 @@ class LoginsScreenController extends ChangeNotifier {
     }
   }
 
+  Future<bool> signInWithApple() async {
+    processStatusNotifier.setLoading();
+
+    try {
+      final result = await Get.find<AuthInterface>().signInWithApple();
+      return await result.fold(
+        (failure) async {
+          final errorMessage = failure.uiMessage.isNotEmpty
+              ? failure.uiMessage
+              : 'Unable to complete Sign in with Apple.';
+          snackbarNotifier.notifyError(message: errorMessage);
+          processStatusNotifier.setError();
+          return false;
+        },
+        (_) async {
+          processStatusNotifier.setSuccess();
+          return true;
+        },
+      );
+    } catch (_) {
+      processStatusNotifier.setError();
+      snackbarNotifier.notifyError(
+        message: 'Unable to complete Sign in with Apple.',
+      );
+      return false;
+    }
+  }
+
 }

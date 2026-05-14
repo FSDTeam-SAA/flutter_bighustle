@@ -21,22 +21,41 @@ final class LicenseInterfaceImpl extends LicenseInterface {
   }) async {
     return asyncTryCatch(
       tryFunc: () async {
-        final formData = FormData.fromMap({
+        final formDataMap = <String, dynamic>{
+          'name': param.fullName,
           'fullName': param.fullName,
+          'firstName': param.firstName,
+          'lastName': param.lastName,
+          'first_name': param.firstName,
+          'last_name': param.lastName,
+          'email': param.email,
           'licenseNumber': param.licenseNumber,
           'state': param.state,
           'dateOfBirth': param.dateOfBirth,
           'expiryDate': param.expiryDate,
+          'expirationDate': param.expiryDate,
           'licenseClass': param.licenseClass,
-          'userPhoto': await MultipartFile.fromFile(
+        };
+
+        if (param.userPhoto.isNotEmpty &&
+            !param.userPhoto.startsWith('http') &&
+            param.userPhoto.contains('/')) {
+          formDataMap['userPhoto'] = await MultipartFile.fromFile(
             param.userPhoto,
             filename: param.userPhoto.split('/').last,
-          ),
-          'licensePhoto': await MultipartFile.fromFile(
+          );
+        }
+
+        if (param.licensePhoto.isNotEmpty &&
+            !param.licensePhoto.startsWith('http') &&
+            param.licensePhoto.contains('/')) {
+          formDataMap['licensePhoto'] = await MultipartFile.fromFile(
             param.licensePhoto,
             filename: param.licensePhoto.split('/').last,
-          ),
-        });
+          );
+        }
+
+        final formData = FormData.fromMap(formDataMap);
         final response = await appPigeon.post(
           ApiEndpoints.createLicense,
           data: formData,
@@ -46,18 +65,29 @@ final class LicenseInterfaceImpl extends LicenseInterface {
             ? Map<String, dynamic>.from(response.data)
             : <String, dynamic>{};
         final message =
-            responseBody['message']?.toString() ?? 'License created successfully';
+            responseBody['message']?.toString() ??
+            'License created successfully';
+        final responseData = responseBody['data'];
+        String invitationUrl = '';
+        if (responseData is Map) {
+          final dataMap = Map<String, dynamic>.from(responseData);
+          final invitation = dataMap['invitation'];
+          if (invitation is Map) {
+            invitationUrl = invitation['invitation_url']?.toString() ?? '';
+          }
+        }
 
         return Success(
           message: message,
-          data: message,
+          data: invitationUrl.isNotEmpty ? invitationUrl : message,
         );
       },
     );
   }
 
   @override
-  Future<Either<DataCRUDFailure, Success<List<LicenseResponseModel>>>> getLicense() async {
+  Future<Either<DataCRUDFailure, Success<List<LicenseResponseModel>>>>
+  getLicense() async {
     return asyncTryCatch(
       tryFunc: () async {
         final response = await appPigeon.get(ApiEndpoints.getLicense);
@@ -65,7 +95,7 @@ final class LicenseInterfaceImpl extends LicenseInterface {
             ? Map<String, dynamic>.from(response.data)
             : <String, dynamic>{};
         final responseData = responseBody["data"];
-        
+
         if (responseData == null) {
           return Success(
             message: 'No license data found',
@@ -76,17 +106,25 @@ final class LicenseInterfaceImpl extends LicenseInterface {
         List<LicenseResponseModel> licenses = [];
         if (responseData is List) {
           licenses = responseData
-              .map((item) => LicenseResponseModel.fromJson(
-                  Map<String, dynamic>.from(item)))
+              .map(
+                (item) => LicenseResponseModel.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
               .toList();
         } else if (responseData is Map) {
           // If single license object instead of array
-          licenses = [LicenseResponseModel.fromJson(
-              Map<String, dynamic>.from(responseData))];
+          licenses = [
+            LicenseResponseModel.fromJson(
+              Map<String, dynamic>.from(responseData),
+            ),
+          ];
         }
 
         return Success(
-          message: responseBody['message']?.toString() ?? 'Licenses fetched successfully',
+          message:
+              responseBody['message']?.toString() ??
+              'Licenses fetched successfully',
           data: licenses,
         );
       },
@@ -110,7 +148,7 @@ final class LicenseInterfaceImpl extends LicenseInterface {
         };
 
         // Add files only if they are valid file paths (not empty strings)
-        if (param.userPhoto.isNotEmpty && 
+        if (param.userPhoto.isNotEmpty &&
             !param.userPhoto.startsWith('http') &&
             param.userPhoto.contains('/')) {
           formDataMap['userPhoto'] = await MultipartFile.fromFile(
@@ -119,7 +157,7 @@ final class LicenseInterfaceImpl extends LicenseInterface {
           );
         }
 
-        if (param.licensePhoto.isNotEmpty && 
+        if (param.licensePhoto.isNotEmpty &&
             !param.licensePhoto.startsWith('http') &&
             param.licensePhoto.contains('/')) {
           formDataMap['licensePhoto'] = await MultipartFile.fromFile(
@@ -129,29 +167,28 @@ final class LicenseInterfaceImpl extends LicenseInterface {
         }
 
         final formData = FormData.fromMap(formDataMap);
-        
+
         final response = await appPigeon.put(
           ApiEndpoints.updateLicense(userId),
           data: formData,
           options: Options(contentType: 'multipart/form-data'),
         );
-        
+
         final responseBody = response.data is Map
             ? Map<String, dynamic>.from(response.data)
             : <String, dynamic>{};
         final message =
-            responseBody['message']?.toString() ?? 'License updated successfully';
+            responseBody['message']?.toString() ??
+            'License updated successfully';
 
-        return Success(
-          message: message,
-          data: message,
-        );
+        return Success(message: message, data: message);
       },
     );
   }
 
   @override
-  Future<Either<DataCRUDFailure, Success<List<LicenseAlertModel>>>> getAlerts() async {
+  Future<Either<DataCRUDFailure, Success<List<LicenseAlertModel>>>>
+  getAlerts() async {
     return asyncTryCatch(
       tryFunc: () async {
         final response = await appPigeon.get(ApiEndpoints.getAlerts);
@@ -159,7 +196,7 @@ final class LicenseInterfaceImpl extends LicenseInterface {
             ? Map<String, dynamic>.from(response.data)
             : <String, dynamic>{};
         final responseData = responseBody["data"];
-        
+
         if (responseData == null) {
           return Success(
             message: responseBody['message']?.toString() ?? 'No alerts found',
@@ -170,13 +207,17 @@ final class LicenseInterfaceImpl extends LicenseInterface {
         List<LicenseAlertModel> alerts = [];
         if (responseData is List) {
           alerts = responseData
-              .map((item) => LicenseAlertModel.fromJson(
-                  Map<String, dynamic>.from(item)))
+              .map(
+                (item) =>
+                    LicenseAlertModel.fromJson(Map<String, dynamic>.from(item)),
+              )
               .toList();
         }
 
         return Success(
-          message: responseBody['message']?.toString() ?? 'Alerts fetched successfully',
+          message:
+              responseBody['message']?.toString() ??
+              'Alerts fetched successfully',
           data: alerts,
         );
       },

@@ -104,4 +104,23 @@ class RegisterScreenController extends ChangeNotifier {
     _busy = false;
     notifyListeners();
   }
+
+  Future<bool> signInWithApple() async {
+    processStatusNotifier.setLoading();
+
+    final result = await Get.find<AuthInterface>().signInWithApple();
+    final succeeded = await result.fold((failure) async {
+      snackbarNotifier.notifyError(
+        message: failure.uiMessage.isNotEmpty
+            ? failure.uiMessage
+            : 'Unable to complete Sign in with Apple.',
+      );
+      processStatusNotifier.setError();
+      return false;
+    }, (_) async {
+      processStatusNotifier.setSuccess();
+      return true;
+    });
+    return succeeded;
+  }
 }

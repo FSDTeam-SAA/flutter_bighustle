@@ -91,7 +91,7 @@ class AppPigeon {
     await _authService.clearCurrentAuthRecord();
   }
 
-  // Public GET/POST/PUT/DELETE wrappers
+  // Public GET/POST/PUT/DELETE wrappers  
   Future<Response> get(
     String path, {
     dynamic data,

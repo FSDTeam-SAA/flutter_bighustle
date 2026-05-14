@@ -1,70 +1,153 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
+
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import '../../../core/api_handler/failure.dart';
-import '../../../core/api_handler/success.dart';
-import '../../../core/constants/stripe_config.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
+
 import '../../../core/helpers/subscription_access.dart';
-import '../../../core/helpers/validation.dart';
 import '../../../core/notifiers/snackbar_notifier.dart';
 import '../../../core/services/app_pigeon/app_pigeon.dart';
-import '../../profile/interface/profile_interface.dart';
 import '../../profile/model/profile_data.dart';
-import '../implement/plan_interface_impl.dart';
-import '../interface/plan_interface.dart';
-import '../model/payment_response_model.dart';
 import '../model/plan_model.dart';
 
 class SubscribePaymentController extends ChangeNotifier {
-  SubscribePaymentController();
+  SubscribePaymentController({InAppPurchase? inAppPurchase})
+    : _inAppPurchase = inAppPurchase ?? InAppPurchase.instance;
 
-  final List<PlanModel> _plans = [];
+  static const Map<String, _StoreSubscriptionConfig> _storeConfigs = {
+    'month_subscription': _StoreSubscriptionConfig(
+      productId: 'month_subscription',
+      displayName: 'Monthly Subscription',
+      interval: 'month',
+      features: <String>[
+        'Full access to driver status subscription features',
+        'Ticket details and subscription-only ticket tools',
+        'License upload and verification access',
+        'Premium driver alerts and account access',
+      ],
+    ),
+    'yearly_subscription': _StoreSubscriptionConfig(
+      productId: 'yearly_subscription',
+      displayName: 'Yearly Subscription',
+      interval: 'year',
+      features: <String>[
+        'Full access to driver status subscription features',
+        'Ticket details and subscription-only ticket tools',
+        'License upload and verification access',
+        'Premium driver alerts and account access',
+      ],
+    ),
+  };
+
+  final InAppPurchase _inAppPurchase;
+  final List<PlanModel> _plans = <PlanModel>[];
+  final Map<String, ProductDetails> _storeProductsById =
+      <String, ProductDetails>{};
+
+  StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
+  SnackbarNotifier? _snackbarNotifier;
   PlanModel? _currentPlan;
   PlanModel? _selectedPlan;
   bool _isLoadingPlans = false;
   bool _isSubmitting = false;
   bool _initialized = false;
+  bool _storeAvailable = false;
+  String? _storeMessage;
 
   List<PlanModel> get plans => List.unmodifiable(_plans);
   PlanModel? get currentPlan => _currentPlan;
   PlanModel? get selectedPlan => _selectedPlan;
   bool get isLoadingPlans => _isLoadingPlans;
   bool get isSubmitting => _isSubmitting;
-
   bool get hasPlans => _plans.isNotEmpty;
   bool get hasSelection => _selectedPlan != null;
   bool get isCurrentSelection =>
       _selectedPlan != null && _selectedPlan?.id == _currentPlan?.id;
-
-  PlanInterface get _planInterface => _ensurePlanInterface();
+  bool get supportsAppleStore => _supportsAppleStore();
+  bool get isStoreAvailable => supportsAppleStore && _storeAvailable;
+  String? get storeMessage => _storeMessage;
 
   void init() {
     if (_initialized) return;
     _initialized = true;
-  }
-
-  PlanInterface _ensurePlanInterface() {
-    if (!Get.isRegistered<PlanInterface>()) {
-      Get.put<PlanInterface>(
-        PlanInterfaceImpl(appPigeon: Get.find<AppPigeon>()),
-      );
-    }
-    return Get.find<PlanInterface>();
+    _purchaseSubscription = _inAppPurchase.purchaseStream.listen(
+      _handlePurchaseUpdates,
+      onDone: () {
+        _purchaseSubscription = null;
+      },
+      onError: (_) {
+        _setSubmitting(false);
+        _snackbarNotifier?.notifyError(
+          message: 'An error occurred while listening for App Store updates.',
+        );
+      },
+    );
   }
 
   Future<void> loadPlans({SnackbarNotifier? snackbarNotifier}) async {
+    if (snackbarNotifier != null) {
+      _snackbarNotifier = snackbarNotifier;
+    }
+
     _setLoadingPlans(true);
+    _storeMessage = null;
+
     try {
-      final result = await _planInterface.getPlans();
-      result.fold(
-        (failure) => _handlePlanLoadFailure(failure, snackbarNotifier),
-        (success) => _handlePlanLoadSuccess(success),
+      if (!supportsAppleStore) {
+        _handleStoreUnavailable(
+          'Apple subscriptions are available only on iPhone, iPad, and Mac.',
+        );
+        return;
+      }
+
+      _storeAvailable = await _inAppPurchase.isAvailable();
+      if (!_storeAvailable) {
+        _handleStoreUnavailable(
+          'The App Store is unavailable right now. Try again in a moment.',
+        );
+        return;
+      }
+
+      final response = await _inAppPurchase.queryProductDetails(
+        _storeConfigs.keys.toSet(),
       );
+
+      if (response.error != null) {
+        _handleStoreUnavailable(
+          response.error!.message.isNotEmpty
+              ? response.error!.message
+              : 'Unable to load Apple subscription products.',
+        );
+        return;
+      }
+
+      _storeProductsById
+        ..clear()
+        ..addEntries(
+          response.productDetails.map(
+            (product) => MapEntry(product.id, product),
+          ),
+        );
+
+      if (response.notFoundIDs.isNotEmpty) {
+        _storeMessage =
+            'Missing App Store products: ${response.notFoundIDs.join(', ')}.';
+      }
+
+      final fetchedPlans = _buildPlans(response.productDetails);
+      _plans
+        ..clear()
+        ..addAll(fetchedPlans);
+
+      _currentPlan = _resolveCurrentPlan(fetchedPlans);
+      _selectedPlan = _resolveSelectedPlan(fetchedPlans, _currentPlan);
+      notifyListeners();
     } catch (_) {
-      snackbarNotifier?.notifyError(
-        message: 'An error occurred while loading plans',
-      );
+      _plans.clear();
+      _currentPlan = null;
+      _selectedPlan = null;
+      _storeMessage = 'An error occurred while loading Apple subscriptions.';
+      notifyListeners();
     } finally {
       _setLoadingPlans(false);
     }
@@ -79,98 +162,259 @@ class SubscribePaymentController extends ChangeNotifier {
   Future<bool> submitSubscription({
     required SnackbarNotifier snackbarNotifier,
   }) async {
-    if (!_canSubmit(snackbarNotifier)) return false;
+    _snackbarNotifier = snackbarNotifier;
 
-    var success = false;
-    _setSubmitting(true);
-    try {
-      debugPrint(
-        'Stripe: submit start planId=${_selectedPlan?.id} price=${_selectedPlan?.price} currency=${_selectedPlan?.currency}',
-      );
-      debugPrint('Stripe: resolve billing info');
-      final billingInfo = await _requireBillingInfo(snackbarNotifier);
-      debugPrint(
-        'Stripe: billing info email=${billingInfo.email.isNotEmpty} name=${billingInfo.name.isNotEmpty}',
-      );
-      debugPrint('Stripe: create payment intent');
-      final paymentData = await _createPayment(billingInfo, snackbarNotifier);
-      if (paymentData == null) return false;
-
-      debugPrint('Stripe: init payment sheet');
-      await _presentPaymentSheet(billingInfo, paymentData);
-      debugPrint('Stripe: payment sheet completed');
-      success = await _confirmPayment(paymentData, snackbarNotifier);
-    } on TimeoutException {
+    if (!supportsAppleStore) {
       snackbarNotifier.notifyError(
-        message: 'Payment timed out. Please try again.',
+        message: 'Apple subscriptions are supported only on Apple devices.',
       );
-    } on StripeException catch (e) {
-      debugPrint(
-        'StripeException: ${e.error.code} ${e.error.localizedMessage ?? e.error.message}',
-      );
+      return false;
+    }
+
+    if (!isStoreAvailable) {
       snackbarNotifier.notifyError(
         message:
-            e.error.localizedMessage ??
-            e.error.message ??
-            'Stripe payment cancelled',
+            _storeMessage ??
+            'The App Store is unavailable. Refresh and try again.',
       );
-    } catch (_) {
-      debugPrint('Stripe: unknown error');
-      snackbarNotifier.notifyError(message: 'Stripe payment failed');
-    } finally {
-      _setSubmitting(false);
+      return false;
     }
-    return success;
-  }
 
-  bool _canSubmit(SnackbarNotifier snackbarNotifier) {
     if (!hasSelection) {
       snackbarNotifier.notifyError(message: 'Please select a plan.');
       return false;
     }
+
     if (isCurrentSelection) {
       snackbarNotifier.notify(message: 'You are already on this plan.');
       return false;
     }
-    final activeSubscriptionMessage =
-        SubscriptionAccess.activeSubscriptionBlockMessage();
-    if (activeSubscriptionMessage != null) {
-      snackbarNotifier.notify(message: activeSubscriptionMessage);
-      return false;
-    }
-    if (StripeConfig.publishableKey.isEmpty ||
-        StripeConfig.publishableKey.contains('replace_with_your_key')) {
+
+    final plan = _selectedPlan!;
+    final product = _storeProductsById[plan.id];
+    if (product == null) {
       snackbarNotifier.notifyError(
-        message: 'Stripe publishable key is not set.',
+        message: 'This App Store product is not available yet.',
       );
       return false;
     }
-    return true;
+
+    _setSubmitting(true);
+    try {
+      final launched = await _inAppPurchase.buyNonConsumable(
+        purchaseParam: PurchaseParam(productDetails: product),
+      );
+      if (!launched) {
+        _setSubmitting(false);
+        snackbarNotifier.notifyError(
+          message: 'Unable to open the App Store purchase sheet.',
+        );
+        return false;
+      }
+    } catch (_) {
+      _setSubmitting(false);
+      snackbarNotifier.notifyError(
+        message: 'Unable to start the App Store purchase.',
+      );
+      return false;
+    }
+
+    return false;
   }
 
-  void _handlePlanLoadFailure(
-    DataCRUDFailure failure,
-    SnackbarNotifier? snackbarNotifier,
-  ) {
-    snackbarNotifier?.notifyError(
-      message: failure.uiMessage.isNotEmpty
-          ? failure.uiMessage
-          : 'Failed to load plans',
+  Future<void> restorePurchases({
+    required SnackbarNotifier snackbarNotifier,
+  }) async {
+    _snackbarNotifier = snackbarNotifier;
+
+    if (!supportsAppleStore) {
+      snackbarNotifier.notifyError(
+        message: 'Apple subscriptions are supported only on Apple devices.',
+      );
+      return;
+    }
+
+    if (!isStoreAvailable) {
+      snackbarNotifier.notifyError(
+        message:
+            _storeMessage ??
+            'The App Store is unavailable. Refresh and try again.',
+      );
+      return;
+    }
+
+    snackbarNotifier.notify(
+      message: 'Checking your App Store account for previous purchases.',
     );
-    _plans.clear();
-    _currentPlan = null;
-    _selectedPlan = null;
+    try {
+      await _inAppPurchase.restorePurchases();
+    } catch (_) {
+      snackbarNotifier.notifyError(
+        message: 'Unable to restore previous App Store purchases.',
+      );
+    }
+  }
+
+  Future<void> persistSubscription({
+    required String subscriptionPlanId,
+    required String planName,
+    required String subscriptionInterval,
+    required String subscriptionStartsAt,
+    required String subscriptionEndsAt,
+  }) async {
+    _currentPlan = _selectedPlan;
+    ProfileData.instance.updateSubscription(
+      subscribed: true,
+      planName: planName,
+      subscriptionInterval: subscriptionInterval,
+      subscriptionStartsAt: subscriptionStartsAt,
+      subscriptionEndsAt: subscriptionEndsAt,
+    );
+    await _persistSubscriptionToCurrentAuth(
+      subscribed: true,
+      subscriptionPlanId: subscriptionPlanId,
+      planName: planName,
+      subscriptionInterval: subscriptionInterval,
+      subscriptionStartsAt: subscriptionStartsAt,
+      subscriptionEndsAt: subscriptionEndsAt,
+    );
     notifyListeners();
   }
 
-  void _handlePlanLoadSuccess(Success<List<PlanModel>> success) {
-    final fetchedPlans = _normalizePlans(success.data ?? <PlanModel>[]);
-    _plans
-      ..clear()
-      ..addAll(fetchedPlans);
+  Future<void> _handlePurchaseUpdates(
+    List<PurchaseDetails> purchaseDetailsList,
+  ) async {
+    for (final purchaseDetails in purchaseDetailsList) {
+      if (!_storeConfigs.containsKey(purchaseDetails.productID)) {
+        if (purchaseDetails.pendingCompletePurchase) {
+          await _inAppPurchase.completePurchase(purchaseDetails);
+        }
+        continue;
+      }
 
-    _currentPlan = _resolveCurrentPlan(fetchedPlans);
-    _selectedPlan = _resolveSelectedPlan(fetchedPlans, _currentPlan);
+      switch (purchaseDetails.status) {
+        case PurchaseStatus.pending:
+          // Apple's payment sheet is being shown — do not complete the
+          // transaction here; it hasn't been confirmed by the user yet.
+          _setSubmitting(true);
+          break;
+        case PurchaseStatus.purchased:
+        case PurchaseStatus.restored:
+          await _deliverPurchase(purchaseDetails);
+          if (purchaseDetails.pendingCompletePurchase) {
+            await _inAppPurchase.completePurchase(purchaseDetails);
+          }
+          break;
+        case PurchaseStatus.error:
+          _setSubmitting(false);
+          _snackbarNotifier?.notifyError(
+            message:
+                purchaseDetails.error?.message ??
+                'Unable to complete the App Store purchase.',
+          );
+          if (purchaseDetails.pendingCompletePurchase) {
+            await _inAppPurchase.completePurchase(purchaseDetails);
+          }
+          break;
+        case PurchaseStatus.canceled:
+          _setSubmitting(false);
+          _snackbarNotifier?.notify(message: 'Purchase canceled.');
+          if (purchaseDetails.pendingCompletePurchase) {
+            await _inAppPurchase.completePurchase(purchaseDetails);
+          }
+          break;
+      }
+    }
+  }
+
+  Future<void> _deliverPurchase(PurchaseDetails purchaseDetails) async {
+    final config = _storeConfigs[purchaseDetails.productID];
+    if (config == null) {
+      _setSubmitting(false);
+      return;
+    }
+
+    final startsAtUtc =
+        _readTransactionDateUtc(purchaseDetails) ?? DateTime.now().toUtc();
+    final endsAtUtc =
+        SubscriptionAccess.estimateSubscriptionEndsAt(
+          startsAtUtc: startsAtUtc,
+          interval: config.interval,
+        ) ??
+        startsAtUtc;
+
+    await persistSubscription(
+      subscriptionPlanId: config.productId,
+      planName: config.displayName,
+      subscriptionInterval: config.interval,
+      subscriptionStartsAt: startsAtUtc.toIso8601String(),
+      subscriptionEndsAt: endsAtUtc.toIso8601String(),
+    );
+
+    _setSubmitting(false);
+    await loadPlans(snackbarNotifier: _snackbarNotifier);
+    _snackbarNotifier?.notify(
+      message: purchaseDetails.status == PurchaseStatus.restored
+          ? '${config.displayName} restored from the App Store.'
+          : '${config.displayName} activated.',
+    );
+  }
+
+  DateTime? _readTransactionDateUtc(PurchaseDetails purchaseDetails) {
+    final rawDate = purchaseDetails.transactionDate?.trim() ?? '';
+    if (rawDate.isEmpty) return null;
+
+    final millis = int.tryParse(rawDate);
+    if (millis != null) {
+      return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
+    }
+
+    return DateTime.tryParse(rawDate)?.toUtc();
+  }
+
+  List<PlanModel> _buildPlans(List<ProductDetails> productDetails) {
+    final currentInterval = SubscriptionAccess.normalizeInterval(
+      ProfileData.instance.subscriptionInterval,
+    );
+    final currentPlanName = ProfileData.instance.planName.trim().toLowerCase();
+    final hasActiveSubscription = ProfileData.instance.subscribed;
+
+    final plans = productDetails
+        .map((product) {
+          final config = _storeConfigs[product.id];
+          if (config == null) {
+            return null;
+          }
+
+          final isCurrent =
+              hasActiveSubscription &&
+              (currentInterval == config.interval ||
+                  currentPlanName == config.displayName.toLowerCase());
+
+          return PlanModel(
+            id: product.id,
+            name: config.displayName,
+            price: product.rawPrice,
+            currency: product.currencyCode,
+            recurring: true,
+            interval: config.interval,
+            isCurrent: isCurrent,
+            features: config.features,
+          );
+        })
+        .whereType<PlanModel>()
+        .toList();
+
+    plans.sort(_planSortComparator);
+    return plans;
+  }
+
+  void _handleStoreUnavailable(String message) {
+    _storeAvailable = false;
+    _plans.clear();
+    _currentPlan = null;
+    _selectedPlan = null;
+    _storeMessage = message;
     notifyListeners();
   }
 
@@ -178,24 +422,21 @@ class SubscribePaymentController extends ChangeNotifier {
     for (final plan in plans) {
       if (plan.isCurrent) return plan;
     }
-    for (final plan in plans) {
-      if (plan.price == 0) return plan;
-    }
     return null;
   }
 
   PlanModel? _resolveSelectedPlan(List<PlanModel> plans, PlanModel? current) {
     if (plans.isEmpty) return null;
-    PlanModel? fallback;
     for (final plan in plans) {
-      if (plan.id == current?.id) continue;
-      if (plan.price <= 0) continue;
-      if (plan.interval == 'month') {
-        return plan;
-      }
-      fallback ??= plan;
+      if (plan.id != current?.id) return plan;
     }
-    return fallback ?? current ?? plans.first;
+    return current ?? plans.first;
+  }
+
+  bool _supportsAppleStore() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
   }
 
   void _setLoadingPlans(bool value) {
@@ -210,39 +451,9 @@ class SubscribePaymentController extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool _isValidEmail(String value) => value.isNotEmpty && isEmail(value);
-
-  bool _isValidName(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return false;
-    final normalized = trimmed.toLowerCase();
-    return normalized != 'n/a' && normalized != 'profile name';
-  }
-
-  String _readString(dynamic value) => value?.toString().trim() ?? '';
-
-  String _readNameFromMap(Map data) {
-    final direct = _readString(data['name']);
-    if (_isValidName(direct)) return direct;
-    final fullName = _readString(data['fullName'] ?? data['fullname']);
-    if (_isValidName(fullName)) return fullName;
-    final firstName = _readString(data['firstName'] ?? data['firstname']);
-    final lastName = _readString(data['lastName'] ?? data['lastname']);
-    final combined = [firstName, lastName].where((v) => v.isNotEmpty).join(' ');
-    if (_isValidName(combined)) return combined;
-    return '';
-  }
-
-  String _readEmailFromMap(Map data) {
-    final direct = _readString(data['email']);
-    if (_isValidEmail(direct)) return direct;
-    final alt = _readString(data['emailAddress'] ?? data['mail']);
-    if (_isValidEmail(alt)) return alt;
-    return '';
-  }
-
   Future<void> _persistSubscriptionToCurrentAuth({
     required bool subscribed,
+    required String subscriptionPlanId,
     required String planName,
     required String subscriptionInterval,
     required String subscriptionStartsAt,
@@ -259,6 +470,8 @@ class SubscribePaymentController extends ChangeNotifier {
 
       final authData = Map<String, dynamic>.from(status.auth.data);
       authData['subscribed'] = subscribed;
+      authData['subscriptionPlanId'] = subscriptionPlanId;
+      authData['planId'] = subscriptionPlanId;
       authData['planName'] = planName;
       authData['subscriptionInterval'] = subscriptionInterval;
       authData['subscriptionStartsAt'] = subscriptionStartsAt;
@@ -272,381 +485,6 @@ class SubscribePaymentController extends ChangeNotifier {
         ),
       );
     } catch (_) {}
-  }
-
-  _BillingInfo _readBillingFromProfileData() {
-    return _BillingInfo(
-      email: _readString(ProfileData.instance.email),
-      name: _readString(ProfileData.instance.name),
-    );
-  }
-
-  _BillingInfo _mergeBilling(_BillingInfo current, _BillingInfo next) {
-    final email = _isValidEmail(current.email) ? current.email : next.email;
-    final name = _isValidName(current.name) ? current.name : next.name;
-    return _BillingInfo(email: email, name: name);
-  }
-
-  _BillingInfo _readBillingFromMap(Map data) {
-    return _BillingInfo(
-      email: _readEmailFromMap(data),
-      name: _readNameFromMap(data),
-    );
-  }
-
-  Future<_BillingInfo> _readBillingFromAuth() async {
-    final status = await Get.find<AppPigeon>().currentAuth();
-    if (status is! Authenticated) return const _BillingInfo.empty();
-
-    final authData = status.auth.data;
-    var billing = _readBillingFromMap(authData);
-    final userData = authData['user'];
-    if (userData is Map) {
-      billing = _mergeBilling(billing, _readBillingFromMap(userData));
-    }
-    return billing;
-  }
-
-  Future<_BillingInfo> _readBillingFromProfileApi() async {
-    if (!Get.isRegistered<ProfileInterface>()) {
-      return const _BillingInfo.empty();
-    }
-
-    final result = await Get.find<ProfileInterface>().getProfile();
-    return result.fold((_) => const _BillingInfo.empty(), (success) {
-      final profile = success.data;
-      if (profile == null) return const _BillingInfo.empty();
-      ProfileData.instance.updateFromProfile(profile);
-      return _BillingInfo(
-        email: _readString(profile.email),
-        name: _readString(profile.name),
-      );
-    });
-  }
-
-  Future<_BillingInfo> _resolveBillingInfo() async {
-    var billing = _readBillingFromProfileData();
-    if (!billing.isComplete) {
-      billing = _mergeBilling(billing, await _readBillingFromAuth());
-    }
-    if (!billing.isComplete) {
-      billing = _mergeBilling(billing, await _readBillingFromProfileApi());
-    }
-    return _BillingInfo(
-      email: _isValidEmail(billing.email) ? billing.email : '',
-      name: _isValidName(billing.name) ? billing.name : '',
-    );
-  }
-
-  Future<_BillingInfo> _requireBillingInfo(
-    SnackbarNotifier snackbarNotifier,
-  ) async {
-    final billingInfo = await _resolveBillingInfo();
-    if (!billingInfo.isComplete) {
-      snackbarNotifier.notify(
-        message:
-            'Name/email missing. You can still continue, but please update your profile later.',
-      );
-    }
-    return billingInfo;
-  }
-
-  Future<PlanPaymentCreateResponse?> _createPayment(
-    _BillingInfo billingInfo,
-    SnackbarNotifier snackbarNotifier,
-  ) async {
-    debugPrint('Stripe: createPayment start');
-    debugPrint(
-      'Stripe: createPlanPayment planId=${_selectedPlan?.id} email=${billingInfo.email} name=${billingInfo.name}',
-    );
-    final createResult = await _planInterface
-        .createPlanPayment(
-          planId: _selectedPlan!.id,
-          // provider: 'stripe',
-          email: billingInfo.email,
-          name: billingInfo.name,
-        )
-        .timeout(const Duration(seconds: 25));
-
-    final paymentData = createResult.fold((failure) {
-      debugPrint('Stripe: createPayment failed ${failure.fullError}');
-      snackbarNotifier.notifyError(
-        message: failure.uiMessage.isNotEmpty
-            ? failure.uiMessage
-            : 'Failed to create payment',
-      );
-      return null;
-    }, (success) => success.data);
-
-    if (paymentData == null ||
-        paymentData.clientSecret == null ||
-        paymentData.clientSecret!.isEmpty) {
-      debugPrint(
-        'Stripe: createPayment missing clientSecret paymentId=${paymentData?.paymentId} \nproviderPaymentId=${paymentData?.providerPaymentId}',
-      );
-      snackbarNotifier.notifyError(
-        message: 'Stripe client secret missing from backend response.',
-      );
-      return null;
-    }
-
-    debugPrint(
-      'Stripe: createPayment ok paymentId=${paymentData.paymentId} '
-      'providerPaymentId=${paymentData.providerPaymentId} '
-      'clientSecretLen=${paymentData.clientSecret?.length}',
-    );
-    return paymentData;
-  }
-
-  Future<void> presentPaymentSheetFromClientSecret({
-    required String clientSecret,
-    String? email,
-    String? name,
-  }) async {
-    final billingInfo = _BillingInfo(
-      email: email?.trim() ?? '',
-      name: name?.trim() ?? '',
-    );
-    await _presentPaymentSheetWithClientSecret(clientSecret, billingInfo);
-  }
-
-  Future<void> _presentPaymentSheet(
-    _BillingInfo billingInfo,
-    PlanPaymentCreateResponse paymentData,
-  ) async {
-    final clientSecret = paymentData.clientSecret ?? '';
-    await _presentPaymentSheetWithClientSecret(clientSecret, billingInfo);
-  }
-
-  Future<void> _presentPaymentSheetWithClientSecret(
-    String clientSecret,
-    _BillingInfo billingInfo,
-  ) async {
-    if (clientSecret.isEmpty) {
-      throw StateError('Stripe client secret missing.');
-    }
-
-    final billingDetails = BillingDetails(
-      email: billingInfo.email.isNotEmpty ? billingInfo.email : null,
-      name: billingInfo.name.isNotEmpty ? billingInfo.name : null,
-    );
-
-    debugPrint('Stripe: initPaymentSheet start');
-    await Stripe.instance
-        .initPaymentSheet(
-          paymentSheetParameters: SetupPaymentSheetParameters(
-            paymentIntentClientSecret: clientSecret,
-            merchantDisplayName: StripeConfig.merchantName,
-            style: ThemeMode.light,
-            returnURL: 'flutterstripe://stripe-redirect',
-            billingDetails: billingDetails,
-          ),
-        )
-        .timeout(const Duration(seconds: 25));
-
-    debugPrint('Stripe: initPaymentSheet done');
-    debugPrint('Stripe: presentPaymentSheet start');
-    await Stripe.instance
-        .presentPaymentSheet(
-          options: const PaymentSheetPresentOptions(timeout: 45000),
-        )
-        .timeout(const Duration(seconds: 60));
-    debugPrint('Stripe: presentPaymentSheet done');
-  }
-
-  Future<bool> _confirmPayment(
-    PlanPaymentCreateResponse paymentData,
-    SnackbarNotifier snackbarNotifier,
-  ) async {
-    const maxAttempts = 4;
-    for (var attempt = 0; attempt < maxAttempts; attempt += 1) {
-      debugPrint('Stripe: confirm attempt ${attempt + 1}/$maxAttempts');
-      final confirmResult = await _planInterface
-          .confirmPlanPayment(
-            paymentId: paymentData.paymentId,
-            providerPaymentId: paymentData.providerPaymentId,
-          )
-          .timeout(const Duration(seconds: 25));
-
-      final outcome = confirmResult.fold(
-        (DataCRUDFailure failure) {
-          final failureMessage = _resolveFailureMessage(failure);
-          if (_isAlreadySucceededPaymentIntentError(failureMessage)) {
-            debugPrint(
-              'Stripe: confirm already-succeeded intent, treating as success.',
-            );
-            return _ConfirmOutcome.success(
-              payment: PlanPaymentModel(
-                id: paymentData.paymentId,
-                planId: _selectedPlan?.id ?? '',
-                provider: 'stripe',
-                amount: paymentData.amount,
-                currency: paymentData.currency,
-                status: 'paid',
-                providerPaymentId: paymentData.providerPaymentId ?? '',
-              ),
-              message: 'Payment successful.',
-            );
-          }
-          debugPrint('Stripe: confirm failed ${failure.fullError}');
-          snackbarNotifier.notifyError(
-            message: failure.uiMessage.isNotEmpty
-                ? failure.uiMessage
-                : 'Payment confirmation failed',
-          );
-          return _ConfirmOutcome.failure();
-        },
-        (success) {
-          debugPrint(
-            'Stripe: confirm response status=${success.data?.status} message=${success.message}',
-          );
-          return _ConfirmOutcome.success(
-            payment: success.data,
-            message: success.message,
-          );
-        },
-      );
-
-      if (!outcome.ok) return false;
-
-      final payment = outcome.payment;
-      if (payment == null) {
-        snackbarNotifier.notifyError(
-          message: 'Payment confirmation data missing.',
-        );
-        return false;
-      }
-
-      final status = payment.status.toLowerCase();
-      final isPaid =
-          status == 'paid' || status == 'success' || status == 'succeeded';
-      if (isPaid) {
-        snackbarNotifier.notifySuccess(message: outcome.message);
-        final selectedPlan = _selectedPlan;
-        final nowUtc = DateTime.now().toUtc();
-        final startsAtIso = payment.subscriptionStartsAt.isNotEmpty
-            ? payment.subscriptionStartsAt
-            : nowUtc.toIso8601String();
-        final fallbackInterval = payment.subscriptionInterval.isNotEmpty
-            ? payment.subscriptionInterval
-            : (selectedPlan?.interval ?? '');
-        final estimatedEndsAt = SubscriptionAccess.estimateSubscriptionEndsAt(
-          startsAtUtc: DateTime.tryParse(startsAtIso)?.toUtc() ?? nowUtc,
-          interval: fallbackInterval,
-        );
-        final endsAtIso = estimatedEndsAt?.toIso8601String() ?? '';
-        final resolvedEndsAt = payment.subscriptionEndsAt.isNotEmpty
-            ? payment.subscriptionEndsAt
-            : endsAtIso;
-        final resolvedInterval = payment.subscriptionInterval.isNotEmpty
-            ? payment.subscriptionInterval
-            : (selectedPlan?.interval ?? '');
-        final resolvedPlanName = payment.planName.isNotEmpty
-            ? payment.planName
-            : (selectedPlan?.name ?? '');
-        const resolvedSubscribed = true;
-
-        _currentPlan = _selectedPlan;
-        ProfileData.instance.updateSubscription(
-          subscribed: resolvedSubscribed,
-          planName: resolvedPlanName,
-          subscriptionInterval: resolvedInterval,
-          subscriptionStartsAt: startsAtIso,
-          subscriptionEndsAt: resolvedEndsAt,
-        );
-        await _persistSubscriptionToCurrentAuth(
-          subscribed: resolvedSubscribed,
-          planName: resolvedPlanName,
-          subscriptionInterval: resolvedInterval,
-          subscriptionStartsAt: startsAtIso,
-          subscriptionEndsAt: resolvedEndsAt,
-        );
-        notifyListeners();
-        return true;
-      }
-
-      final isProcessingLike =
-          status == 'processing' || status == 'created' || status == 'pending';
-      if (isProcessingLike && attempt < maxAttempts - 1) {
-        await Future.delayed(const Duration(seconds: 2));
-        continue;
-      }
-
-      snackbarNotifier.notify(
-        message:
-            'Payment is still processing. Please wait a moment and try again.',
-      );
-      return false;
-    }
-
-    snackbarNotifier.notify(
-      message: 'Payment is still processing. Please try again shortly.',
-    );
-    return false;
-  }
-
-  String _resolveFailureMessage(DataCRUDFailure failure) {
-    if (failure.uiMessage.trim().isNotEmpty) {
-      return failure.uiMessage.trim();
-    }
-    return failure.fullError.trim();
-  }
-
-  bool _isAlreadySucceededPaymentIntentError(String message) {
-    final normalized = message.toLowerCase();
-    return normalized.contains('paymentintent') &&
-        normalized.contains('already') &&
-        normalized.contains('succeed');
-  }
-
-  List<PlanModel> _normalizePlans(List<PlanModel> plans) {
-    if (plans.length < 2) {
-      return plans;
-    }
-
-    final normalized = List<PlanModel>.from(plans);
-    final paidPlans = normalized.where((plan) => plan.price > 0).toList();
-    if (paidPlans.length == 2 &&
-        paidPlans.every((plan) => plan.interval == paidPlans.first.interval)) {
-      paidPlans.sort((a, b) => a.price.compareTo(b.price));
-      var monthlySource = paidPlans.last;
-      var yearlySource = paidPlans.first;
-
-      final lower = paidPlans.first;
-      final higher = paidPlans.last;
-      if (higher.price >= lower.price * 3) {
-        monthlySource = lower;
-        yearlySource = higher;
-      }
-      if (_looksYearly(lower.name) && !_looksYearly(higher.name)) {
-        monthlySource = higher;
-        yearlySource = lower;
-      } else if (_looksYearly(higher.name) && !_looksYearly(lower.name)) {
-        monthlySource = lower;
-        yearlySource = higher;
-      }
-      if (_looksMonthly(lower.name) && !_looksMonthly(higher.name)) {
-        monthlySource = lower;
-        yearlySource = higher;
-      } else if (_looksMonthly(higher.name) && !_looksMonthly(lower.name)) {
-        monthlySource = higher;
-        yearlySource = lower;
-      }
-
-      final monthly = monthlySource.copyWith(interval: 'month');
-      final yearly = yearlySource.copyWith(interval: 'year');
-      for (var i = 0; i < normalized.length; i += 1) {
-        final plan = normalized[i];
-        if (plan.id == monthly.id) {
-          normalized[i] = monthly;
-        } else if (plan.id == yearly.id) {
-          normalized[i] = yearly;
-        }
-      }
-    }
-
-    normalized.sort(_planSortComparator);
-    return normalized;
   }
 
   int _planSortComparator(PlanModel a, PlanModel b) {
@@ -665,46 +503,23 @@ class SubscribePaymentController extends ChangeNotifier {
     return 2;
   }
 
-  bool _looksYearly(String value) {
-    final normalized = value.toLowerCase();
-    return normalized.contains('year') ||
-        normalized.contains('annual') ||
-        normalized.contains('annually');
-  }
-
-  bool _looksMonthly(String value) {
-    final normalized = value.toLowerCase();
-    return normalized.contains('month') || normalized.contains('monthly');
+  @override
+  void dispose() {
+    _purchaseSubscription?.cancel();
+    super.dispose();
   }
 }
 
-class _ConfirmOutcome {
-  final bool ok;
-  final PlanPaymentModel? payment;
-  final String message;
+class _StoreSubscriptionConfig {
+  final String productId;
+  final String displayName;
+  final String interval;
+  final List<String> features;
 
-  const _ConfirmOutcome._({
-    required this.ok,
-    required this.payment,
-    required this.message,
+  const _StoreSubscriptionConfig({
+    required this.productId,
+    required this.displayName,
+    required this.interval,
+    required this.features,
   });
-
-  factory _ConfirmOutcome.failure() =>
-      const _ConfirmOutcome._(ok: false, payment: null, message: '');
-
-  factory _ConfirmOutcome.success({
-    required PlanPaymentModel? payment,
-    required String message,
-  }) => _ConfirmOutcome._(ok: true, payment: payment, message: message);
-}
-
-class _BillingInfo {
-  final String email;
-  final String name;
-
-  const _BillingInfo({required this.email, required this.name});
-
-  const _BillingInfo.empty() : email = '', name = '';
-
-  bool get isComplete => email.isNotEmpty && name.isNotEmpty;
 }

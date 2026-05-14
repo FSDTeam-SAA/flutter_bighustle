@@ -15,6 +15,8 @@ import '../model/verify_email_register_request_model.dart';
 abstract base class AuthInterface extends BaseRepository {
   Future<Either<DataCRUDFailure,Success<String>>> login( {required LoginRequestModel param});
 
+  Future<Either<DataCRUDFailure,Success<String>>> signInWithApple();
+
   Future<Either<DataCRUDFailure,Success<String>>> register( {required RegisterRequest param});
 
   Future<Either<DataCRUDFailure,Success<String>>> forgetPassword( {required ForgetPasswordRequestModel param});

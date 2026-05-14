@@ -25,7 +25,6 @@ final class HomeInterfaceImpl extends HomeInterface {
             ? Map<String, dynamic>.from(responseData)
             : <String, dynamic>{};
         final homeData = HomeResponseModel.fromJson(payload);
-
         return Success(
           message: responseBody['message']?.toString() ?? 'Home data fetched',
           data: homeData,

@@ -18,9 +18,8 @@ class AppRoutes {
   static const String ticket = '/ticket';
   static const String ticketDetails = '/ticket-details';
   static const String ticketNotifications = '/ticket-notifications';
-  static const String planPricing = '/plan-pricing';
-  static const String planPricingDetails = '/plan-pricing-details';
   static const String community = '/community';
   static const String profile = '/profile';
   static const String notifications = '/notifications';
+  static const String subscriptions = '/subscriptions';
 }

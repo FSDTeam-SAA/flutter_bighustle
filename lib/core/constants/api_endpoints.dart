@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 base class ApiEndpoints {
+  // static const String socketUrl = _LocalHostWifi.socketUrl;
   static const String socketUrl = _LiveHostUrls.socketUrl;
-  // static const String socketUrl = _LiveHostUrls.socketUrl;
 
   static const String baseUrl = _LiveHostUrls.baseUrl;
 
@@ -209,16 +209,13 @@ base class ApiEndpoints {
   static String getTicketById(String ticketId) =>
       _Ticket.getTicketById(ticketId);
 
-  // ---------------------- PLAN -----------------------------
-  static const String getPlans = _Plan.getPlans;
-  static const String createPlan = _Plan.createPlan;
-  static String getPlanById(String planId) => _Plan.getPlanById(planId);
-  static String updatePlan(String planId) => _Plan.updatePlan(planId);
-  static String deletePlan(String planId) => _Plan.deletePlan(planId);
-  static const String createPlanPayment = _Plan.createPlanPayment;
-  static const String confirmPlanPaymentNoId = _Plan.confirmPlanPaymentNoId;
-  static String confirmPlanPayment(String paymentId) =>
-      _Plan.confirmPlanPayment(paymentId);
+  // ---------------------- PLANS / SUBSCRIPTIONS -----------------------------
+  /// ### get
+  static const String storeSubscriptionProducts =
+      _Plan.storeSubscriptionProducts;
+
+  /// ### post
+  static const String confirmStoreSubscription = _Plan.confirmStoreSubscription;
 }
 
 // ---------------------- Local Host URLs -----------------------------
@@ -228,9 +225,9 @@ base class ApiEndpoints {
 //   //  static const String baseUrl = 'https://backend-bigghustle-icpx.onrender.com/api/v1';
 //   // static const String socketUrl = 'http://192.168.1.6:5000';
 //   // static const String baseUrl = 'http://192.168.1.6:5000/api/v1';
-  
-//   static const String socketUrl = 'http://10.10.5.85:5000';
-//   static const String baseUrl = 'http://10.10.5.85:5000/api/v1';
+
+//   static const String socketUrl = 'http://10.10.5.71:5000';
+//   static const String baseUrl = 'http://10.10.5.71:5000/api/v1';
 // }
 
 class _LiveHostUrls {
@@ -238,7 +235,7 @@ class _LiveHostUrls {
   //  static const String baseUrl = 'https://backend-bigghustle-icpx.onrender.com/api/v1';
   static const String socketUrl = 'https://api.drivestatusllc.com';
   static const String baseUrl = 'https://api.drivestatusllc.com/api/v1';
-  // static const String baseUrl = 'http://10.10.5.94:5000/api/v1';
+  // static const String baseUrl = 'http://10.10.5.94:5000/api/v1'; 
 }
 
 class _Auth {
@@ -370,15 +367,8 @@ class _Ticket {
 // ---------------------- PLAN -----------------------------
 class _Plan {
   static const String _planRoute = '${ApiEndpoints.baseUrl}/plans';
-  static const String getPlans = _planRoute;
-  static const String createPlan = _planRoute;
-  static String getPlanById(String planId) => '$_planRoute/$planId';
-  static String updatePlan(String planId) => '$_planRoute/$planId';
-  static String deletePlan(String planId) => '$_planRoute/$planId';
-  static const String createPlanPayment = '$_planRoute/payments';
-  static const String confirmPlanPaymentNoId = '$_planRoute/payments/confirm';
-  static String confirmPlanPayment(String paymentId) =>
-      '$_planRoute/payments/$paymentId/confirm';
+  static const String storeSubscriptionProducts = '$_planRoute/store/products';
+  static const String confirmStoreSubscription = '$_planRoute/store/confirm';
 }
 
 // ---------------------- RIDE -----------------------------

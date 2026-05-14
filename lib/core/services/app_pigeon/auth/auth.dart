@@ -40,12 +40,13 @@ base class Auth {
 
   static Auth? _tryFromJsonString(String source) {
     try {
+      final decoded = jsonDecode(source);
       AuthDebugger().dekhao({
         "type": "AUTH_STORAGE",
         "action": "Trying to decode source",
-        "source": source,
+        "source": decoded,
       });
-      return Auth.fromMap(jsonDecode(source));
+      return Auth.fromMap(decoded);
     } catch (e) {
       return null;
     }

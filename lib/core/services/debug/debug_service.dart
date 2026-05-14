@@ -78,14 +78,36 @@ dynamic _normalizeForJson(dynamic value) {
     return value.toIso8601String();
   }
   if (value is Map) {
-    return value.map(
-      (key, val) => MapEntry(key.toString(), _normalizeForJson(val)),
-    );
+    return value.map((key, val) {
+      final keyText = key.toString();
+      if (_isSensitiveDebugKey(keyText)) {
+        return MapEntry(keyText, _redactSensitiveValue(val));
+      }
+      return MapEntry(keyText, _normalizeForJson(val));
+    });
   }
   if (value is Iterable) {
     return value.map(_normalizeForJson).toList();
   }
   return value.toString();
+}
+
+bool _isSensitiveDebugKey(String key) {
+  final normalized = key.toLowerCase();
+  return normalized == 'access_token' ||
+      normalized == 'refreshtoken' ||
+      normalized == 'refresh_token' ||
+      normalized == 'accesstoken' ||
+      normalized == 'authorization' ||
+      normalized == 'token' ||
+      normalized.endsWith('token');
+}
+
+String _redactSensitiveValue(dynamic value) {
+  final text = value?.toString() ?? '';
+  if (text.isEmpty) return '[redacted]';
+  if (text.length <= 8) return '[redacted]';
+  return '${text.substring(0, 4)}...[redacted]...${text.substring(text.length - 4)}';
 }
 
 bool _looksLikeJson(String source) {

@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'package:flutter_bighustle/core/constants/app_routes.dart';
 import 'package:flutter_bighustle/core/notifiers/snackbar_notifier.dart';
@@ -18,6 +20,13 @@ class _SignupScreenState extends State<SignupScreen> {
   final _confirmController = TextEditingController();
   late final RegisterScreenController _controller;
   bool _initialized = false;
+  bool _isAppleLoading = false;
+
+  bool get _supportsAppleSignIn =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
+
   void _onControllerUpdate() {
     if (mounted) {
       setState(() {});
@@ -71,6 +80,20 @@ class _SignupScreenState extends State<SignupScreen> {
         Navigator.pushNamed(context, AppRoutes.login);
       },
     );
+  }
+
+  Future<void> _submitAppleSignIn() async {
+    if (_isAppleLoading) return;
+
+    setState(() => _isAppleLoading = true);
+    final success = await _controller.signInWithApple();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isAppleLoading = false);
+    if (success) {
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
+    }
   }
 
   @override
@@ -146,6 +169,35 @@ class _SignupScreenState extends State<SignupScreen> {
                     : null,
                 isLoading: _controller.isBusy,
               ),
+              if (_supportsAppleSignIn) ...[
+                SizedBox(height: size.height * 0.02),
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'or',
+                        style: TextStyle(
+                          fontSize: (size.width * 0.04).clamp(12.0, 16.0),
+                          color: AuthColors.textMuted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+                SizedBox(height: size.height * 0.02),
+                SizedBox(
+                  height: (size.height * 0.075).clamp(48.0, 60.0),
+                  child: SignInWithAppleButton(
+                    onPressed: _isAppleLoading ? null : _submitAppleSignIn,
+                    style: SignInWithAppleButtonStyle.black,
+                    text: 'Sign up with Apple',
+                  ),
+                ),
+              ],
               SizedBox(height: size.height * 0.02),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
