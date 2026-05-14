@@ -140,11 +140,20 @@ class ProfileData extends ChangeNotifier {
 
   ImageProvider? get avatarImageProvider {
     if (avatarPath != null && avatarPath!.isNotEmpty) {
-      return FileImage(File(avatarPath!));
+      final file = File(avatarPath!);
+      if (file.existsSync()) {
+        return FileImage(file);
+      }
     }
-    if (avatarUrl.isEmpty) {
+    final trimmedUrl = avatarUrl.trim();
+    final uri = Uri.tryParse(trimmedUrl);
+    final hasValidNetworkUrl =
+        uri != null &&
+        uri.hasAbsolutePath &&
+        (uri.scheme == 'http' || uri.scheme == 'https');
+    if (!hasValidNetworkUrl) {
       return null;
     }
-    return NetworkImage(avatarUrl);
+    return NetworkImage(trimmedUrl);
   }
 }
